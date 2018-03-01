@@ -42,8 +42,20 @@ bool VertRemover::tryToCollapse(Entity* e)
 
 bool VertRemover::run()
 {
-  for (int i = 0; i < edges.n; ++i)
-    if (tryToCollapse(edges.e[i]))
+  Entity* shortEdge[2] = {edges.e[0], edges.e[1]};
+  double minLength, l;
+  minLength = adapter->sizeField->measure(edges.e[0]);
+  for (int i = 0; i < edges.n; ++i) {
+    l = adapter->sizeField->measure(edges.e[i]);
+    if (l < minLength)
+    {
+      minLength = l;
+      shortEdge[1] = shortEdge[0];
+      shortEdge[0] = edges.e[i];
+    }
+  }
+  for (int i = 0; i < 2; ++i)
+    if (tryToCollapse(shortEdge[i]))
       return true;
   return false;
 }
