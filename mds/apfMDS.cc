@@ -81,9 +81,9 @@ static int getEdgeIdInFace(apf::Mesh* mesh, apf::MeshEntity* face,
   int vID[2], eID;
   mesh->getDownward(face, 1, edges);
   for (eID = 0; eID < 3; ++eID) {
+    mesh->getDownward(edges[eID], 0, verts);
     mesh->getIntTag(verts[0], vIDTag, &vID[0]);
     mesh->getIntTag(verts[1], vIDTag, &vID[1]);
-    mesh->getDownward(edges[eID], 0, verts);
     if((vID[0] == bedge_data[2] && vID[1] == bedge_data[3]) ||
        (vID[0] == bedge_data[3] && vID[1] == bedge_data[2])) {
       return eID;
