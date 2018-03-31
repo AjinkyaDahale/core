@@ -1069,7 +1069,7 @@ void derive2DMdlFromManifold(Mesh2* mesh, bool* isModelVert,
           m->getIntTag(ent, classifnTag, tagData);
           mds_update_model_for_entity(m->mesh, id, tagData[0], tagData[1]);
         } else {
-          mds_update_model_for_entity(m->mesh, id, 3, minAvbl);
+          mds_update_model_for_entity(m->mesh, id, 2, minAvbl);
         }
       }
     }
