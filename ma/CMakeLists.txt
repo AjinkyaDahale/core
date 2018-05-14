@@ -21,6 +21,7 @@ set(SOURCES
   maOperator.cc
   maCollapse.cc
   maRegionCollapse.cc
+  maElemRemCollapse.cc
   maMatchedCollapse.cc
   maLayerCollapse.cc
   maMatch.cc

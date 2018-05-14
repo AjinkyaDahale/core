@@ -31,7 +31,10 @@ enum {
   DIAGONAL_1    = (1<<13),
   DIAGONAL_2    = (1<<14),
   LAYER_UNSNAP  = (1<<15),
-  DONT_MOVE	= (1<<16)
+  DONT_MOVE	= (1<<16),
+  MARKED        = (1<<17),
+  CAV_OLD       = (1<<18),
+  CAV_NEW       = (1<<19)
 };
 
 class DeleteCallback;
