@@ -33,7 +33,10 @@ enum {
   LAYER_UNSNAP      = (1<<15),
   DONT_MOVE         = (1<<16),
   NEED_NOT_SPLIT    = (1<<17),
-  NEED_NOT_COLLAPSE = (1<<18)
+  NEED_NOT_COLLAPSE = (1<<18),
+  MARKED            = (1<<19),
+  CAV_OLD           = (1<<20),
+  CAV_NEW           = (1<<21)
 };
 
 class DeleteCallback;
