@@ -8,6 +8,19 @@
 namespace ma
 {
 
+  static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1, Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+{
+  Entity* vs[2];
+  m->getDownward(edge, 0, vs);
+  // This should work for linear elements:
+  // get normals at the same vertex but from different faces and compare
+  apf::Vector3 norm1 = computeFaceNormalAtVertex(m, face1, vs[0], Q);
+  apf::Vector3 norm2 = computeFaceNormalAtVertex(m, face2, vs[0], Q);
+  // For now inverting one of the normals to get dihedral angle
+  norm2 = apf::Vector3(0.0, 0.0, 0.0) - norm2;
+  return norm1 * norm2;
+}
+
 ElemRemCollapse::ElemRemCollapse(Adapt* a):
 adapter(a)
 {
@@ -50,7 +63,9 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
         for (int k = 0; k < 3; k++) {
           if(!getFlag(adapter, edges[k], MARKED)) {
 	    // TODO: Add the angle here
-            bEdges.append(std::make_pair(edges[k], 0.0));
+	    // TODO: face pairs
+	    double cda = getCosDihedral(m, edges[k], bs[j], bs[k]);
+            bEdges.append(std::make_pair(edges[k], cda));
             setFlag(adapter, edges[k], MARKED);
           }
         }
