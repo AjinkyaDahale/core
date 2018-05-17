@@ -8,7 +8,8 @@
 namespace ma
 {
 
-  static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1, Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+// TOD: Might as well use apf::getFaceFaceAngleInTet()
+static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1, Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
 {
   Entity* vs[2];
   m->getDownward(edge, 0, vs);
@@ -62,12 +63,19 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
         m->getDownward(bs[j], 1, edges);
         for (int k = 0; k < 3; k++) {
           if(!getFlag(adapter, edges[k], MARKED)) {
-	    // TODO: Add the angle here
-	    // TODO: face pairs
-	    double cda = getCosDihedral(m, edges[k], bs[j], bs[k]);
-            bEdges.append(std::make_pair(edges[k], cda));
+            // TODO: Add the angle here
+            // TODO: face pairs
+	    PCU_ALWAYS_ASSERT(edgeMap.count(edges[k]) == 0);
+            BEdge1 be1;
+            be1.edge = edges[k];
+            be1.face1 = bs[j];
+            edgeMap[edges[k]] = be1;
             setFlag(adapter, edges[k], MARKED);
-          }
+          } else {
+	    PCU_ALWAYS_ASSERT(edgeMap[edges[k]].face1);
+            edgeMap[edges[k]].face2 = bs[j];
+            edgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j], edgeMap[edges[k]].face1);
+	  }
         }
         // This one's just during the debug phase, because
         // fields on faces aren't written to VTK
