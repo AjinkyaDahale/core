@@ -5,10 +5,29 @@
 #include <pcu_util.h>
 
 #include <queue>
+#include <map>
 
 namespace ma {
 
-typedef std::pair<Entity*, double> BEdges;
+typedef std::pair<Entity*, double> BEdge;
+
+class BEdge1
+{
+public:
+  BEdge1()
+  {
+    edge = NULL;
+    face1 = NULL;
+    face2 = NULL;
+    cda = 1.0;
+  }
+  Entity* edge;
+  Entity* face1;
+  Entity* face2;
+  double cda;
+};
+
+typedef std::map<Entity*, BEdge1> EdgeMap;
 
 class ElemRemCollapse
 {
@@ -29,7 +48,7 @@ class ElemRemCollapse
     EntityArray boundaryEnts;
     apf::DynamicArray<bool> cavEntPositive;
     apf::DynamicArray<EntityArray> newEnts;
-    apf::DynamicArray<BEdges> bEdges;
+    EdgeMap edgeMap;
 };
 
 }
