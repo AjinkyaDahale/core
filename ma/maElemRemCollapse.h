@@ -37,6 +37,8 @@ class ElemRemCollapse
     bool setCavity(apf::DynamicArray<Entity*> elems);
     bool addElement(Entity* e);
 
+    bool removeEdge(Entity* e);
+
     bool makeNewElements();
     void cancel();
     void transfer();
