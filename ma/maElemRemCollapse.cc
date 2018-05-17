@@ -8,8 +8,38 @@
 namespace ma
 {
 
-// TOD: Might as well use apf::getFaceFaceAngleInTet()
-static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1, Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+static int rots[4][4] = {{-1,  1,  2,  0},
+                         { 4, -1,  3,  5},
+                         { 7,  8, -1,  6},
+                         {10,  9, 11, -1}};
+
+// Orients the four vertices of the element-to-be-made (3 downward verts
+// of `face` and `opVert`) according to a base tet
+static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
+		           bool dontInvert, Downward vs)
+{
+  Entity *tvi[4], *fvi[3];
+  m->getDownward(tet, 0, tvi);
+  m->getDownward(face, 0, fvi);
+  // Position of vert 0 and vert 3 of element-to-be-made in
+  // old tet
+  int p0, p3;
+  p0 = findIn(tvi, 4, fvi[0]);
+  for (p3 = 0; p3 < 4; ++p3)
+    if (-1==findIn(fvi, 3, tvi[p3]))
+      break;
+  rotateEntity(m->getType(tet), tvi, rots[p0][p3], vs);
+  vs[3] = opVert;
+  // Inversion logic. The `!=` acts as logical XOR.
+  if ((fvi[1]==vs[1])!=dontInvert) {
+    vs[1] = fvi[2];
+    vs[2] = fvi[1];
+  }
+}
+
+// TODO: Might as well use apf::getFaceFaceAngleInTet()
+static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1,
+        Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
 {
   Entity* vs[2];
   m->getDownward(edge, 0, vs);
@@ -74,7 +104,8 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
           } else {
 	    PCU_ALWAYS_ASSERT(edgeMap[edges[k]].face1);
             edgeMap[edges[k]].face2 = bs[j];
-            edgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j], edgeMap[edges[k]].face1);
+            edgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j],
+						   edgeMap[edges[k]].face1);
 	  }
         }
         // This one's just during the debug phase, because
@@ -94,9 +125,28 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   return true;
 }
 
-bool ElemRemCollapse::addElement(Entity* // e
-                                 )
+bool ElemRemCollapse::removeEdge(Entity* e)
 {
+  Mesh* m = adapter->mesh;
+  PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::EDGE);
+  PCU_ALWAYS_ASSERT(getFlag(adapter, e, MARKED));
+  BEdge1& bedge = edgeMap[e];
+  Entity *face1, *opVert;
+  Entity *tet = NULL; // TODO: change when BFaceMap is ready
+  face1 = bedge.face1;
+  opVert = getTriVertOppositeEdge(m, bedge.face2, e);
+  Entity* vs[4];
+  orientForBuild(m, opVert, face1, tet, true, vs);
+  apf::buildElement(m, NULL, apf::Mesh::TET, vs);
+  // TODO: make changes in data structures
+  // TODO: return appropriately
+  return false;
+}
+
+bool ElemRemCollapse::addElement(Entity* e)
+{
+  Mesh* m = adapter->mesh;
+  PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
   return false;
 }
 
