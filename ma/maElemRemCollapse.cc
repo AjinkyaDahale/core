@@ -40,15 +40,13 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
 }
 
 // TODO: Might as well use apf::getFaceFaceAngleInTet()
-static double getCosDihedral(Mesh* m, Entity* edge, Entity* face1,
-        Entity* face2, const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+static double getCosDihedral(Mesh* m, Entity* edge,
+			     Entity* face1, Entity* tet1,
+			     Entity* face2, Entity* tet2,
+			     const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
 {
-  Entity* vs[2];
-  m->getDownward(edge, 0, vs);
-  // This should work for linear elements:
-  // get normals at the same vertex but from different faces and compare
-  apf::Vector3 norm1 = computeFaceNormalAtVertex(m, face1, vs[0], Q);
-  apf::Vector3 norm2 = computeFaceNormalAtVertex(m, face2, vs[0], Q);
+  apf::Vector3 norm1 = computeFaceNormalAtEdgeInTet(m, tet1, face1, edge, Q);
+  apf::Vector3 norm2 = computeFaceNormalAtEdgeInTet(m, tet2, face2, edge, Q);
   // For now inverting one of the normals to get dihedral angle
   norm2 = apf::Vector3(0.0, 0.0, 0.0) - norm2;
   return norm1 * norm2;
@@ -106,9 +104,13 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
             setFlag(adapter, edges[k], MARKED);
           } else {
             PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1);
+	    Entity* face1 = bEdgeMap[edges[k]].face1;
             bEdgeMap[edges[k]].face2 = bs[j];
-            bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j],
-                                                   bEdgeMap[edges[k]].face1);
+            bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j], bFaceMap[bs[j]].first,
+                                                    face1, bFaceMap[face1].first);
+	    // The `!=` acts as XOR. We invert if exactly one of the reference elements is negative
+	    if (bFaceMap[face1].second != bFaceMap[bs[j]].second)
+	      bEdgeMap[edges[k]].cda *= -1;
           }
         }
 
