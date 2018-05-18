@@ -30,8 +30,10 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
       break;
   rotateEntity(m->getType(tet), tvi, rots[p0][p3], vs);
   vs[3] = opVert;
-  // Inversion logic. The `!=` acts as logical XOR.
-  if ((fvi[1]==vs[1])!=dontInvert) {
+  // Inversion logic.
+  PCU_ALWAYS_ASSERT((fvi[1]==vs[1])||(fvi[1]==vs[2]));
+  PCU_ALWAYS_ASSERT((fvi[2]==vs[1])||(fvi[2]==vs[2]));
+  if (!dontInvert) {
     vs[1] = fvi[2];
     vs[2] = fvi[1];
   }
@@ -61,8 +63,9 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
 {
   int numElems = elems.getSize();
   PCU_ALWAYS_ASSERT(numElems);
+  oldEnts.setSize(numElems);
   Mesh* m = adapter->mesh;
-  int d = m->getDimension(); 
+  int d = m->getDimension();
   // int bcount = 0;
   // Entity* b;
   apf::Downward bs;
@@ -71,6 +74,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
     PCU_ALWAYS_ASSERT_VERBOSE(apf::Mesh::typeDimension[m->getType(elems[i])] == d,
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
     setFlag(adapter, elems[i], CAV_OLD);
+    oldEnts.append(elems[i]);
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
     for (int j = 0; j < numBs; ++j) {
@@ -125,23 +129,28 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   return true;
 }
 
-bool ElemRemCollapse::removeEdge(Entity* e)
+Entity* ElemRemCollapse::removeEdge(Entity* e)
 {
   Mesh* m = adapter->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::EDGE);
   PCU_ALWAYS_ASSERT(getFlag(adapter, e, MARKED));
   BEdge& bedge = bEdgeMap[e];
   Entity *face1, *opVert;
-  Entity *tet = bFaceMap[face1].first;
-  bool dontInvert = bFaceMap[face1].second;
+  Entity *tet;
+  bool dontInvert;
   face1 = bedge.face1;
+  tet = bFaceMap[face1].first;
+  dontInvert  = bFaceMap[face1].second;
   opVert = getTriVertOppositeEdge(m, bedge.face2, e);
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
-  apf::buildElement(m, NULL, apf::Mesh::TET, vs);
-  // TODO: make changes in data structures
-  // TODO: return appropriately
-  return false;
+  Entity* newTet = buildElement(adapter, NULL, apf::Mesh::TET, vs);
+  if(findTetRotation(m, newTet, vs) == -1) {
+    // The vertex ordering of returned element is negative of desired.
+    // This might be because an element as such already exists.
+    newTet = NULL;
+  }
+  return newTet;
 }
 
 bool ElemRemCollapse::addElement(Entity* e)
@@ -153,6 +162,13 @@ bool ElemRemCollapse::addElement(Entity* e)
 
 bool ElemRemCollapse::makeNewElements()
 {
+  for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it) {
+    Entity* newTet = removeEdge(it->first);
+    if (newTet) newEnts.append(newTet);
+  }
+
+  ma_dbg::createCavityMesh(adapter, newEnts, "the_new_cavity");
+
   return false;
 }
 
