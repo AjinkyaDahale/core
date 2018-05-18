@@ -16,7 +16,7 @@ static int rots[4][4] = {{-1,  1,  2,  0},
 // Orients the four vertices of the element-to-be-made (3 downward verts
 // of `face` and `opVert`) according to a base tet
 static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
-		           bool dontInvert, Downward vs)
+                           bool dontInvert, Downward vs)
 {
   Entity *tvi[4], *fvi[3];
   m->getDownward(tet, 0, tvi);
@@ -62,7 +62,6 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   int numElems = elems.getSize();
   PCU_ALWAYS_ASSERT(numElems);
   Mesh* m = adapter->mesh;
-  // TODO: set boundary
   int d = m->getDimension(); 
   // int bcount = 0;
   // Entity* b;
@@ -71,6 +70,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   for (int i = 0; i < numElems; ++i) {
     PCU_ALWAYS_ASSERT_VERBOSE(apf::Mesh::typeDimension[m->getType(elems[i])] == d,
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
+    setFlag(adapter, elems[i], CAV_OLD);
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
     for (int j = 0; j < numBs; ++j) {
@@ -82,32 +82,32 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   // Loop through the elems[i]s and then the bs and add bs to boundaryEnts
   for (int i = 0; i < numElems; ++i) {
     int numBs = m->getDownward(elems[i], d-1, bs);
-    cavityEnts[i];
     for (int j = 0; j < numBs; ++j) {
       if (getFlag(adapter, bs[j], MARKED)) {
         // clearFlag(adapter, bs[j], MARKED);
-        boundaryEnts.append(bs[j]);
-        cavityEnts.append(elems[i]);
-        cavEntPositive.append(elems[i]);
+        PCU_ALWAYS_ASSERT(bFaceMap.count(bs[j]) == 0);
+        bFaceMap[bs[j]] = std::make_pair(elems[i], true);
+
         Entity* edges[3];
         m->getDownward(bs[j], 1, edges);
         for (int k = 0; k < 3; k++) {
           if(!getFlag(adapter, edges[k], MARKED)) {
             // TODO: Add the angle here
             // TODO: face pairs
-	    PCU_ALWAYS_ASSERT(edgeMap.count(edges[k]) == 0);
-            BEdge1 be1;
+            PCU_ALWAYS_ASSERT(bEdgeMap.count(edges[k]) == 0);
+            BEdge be1;
             be1.edge = edges[k];
             be1.face1 = bs[j];
-            edgeMap[edges[k]] = be1;
+            bEdgeMap[edges[k]] = be1;
             setFlag(adapter, edges[k], MARKED);
           } else {
-	    PCU_ALWAYS_ASSERT(edgeMap[edges[k]].face1);
-            edgeMap[edges[k]].face2 = bs[j];
-            edgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j],
-						   edgeMap[edges[k]].face1);
-	  }
+            PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1);
+            bEdgeMap[edges[k]].face2 = bs[j];
+            bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k], bs[j],
+                                                   bEdgeMap[edges[k]].face1);
+          }
         }
+
         // This one's just during the debug phase, because
         // fields on faces aren't written to VTK
         Entity* vs[3];
@@ -130,13 +130,14 @@ bool ElemRemCollapse::removeEdge(Entity* e)
   Mesh* m = adapter->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::EDGE);
   PCU_ALWAYS_ASSERT(getFlag(adapter, e, MARKED));
-  BEdge1& bedge = edgeMap[e];
+  BEdge& bedge = bEdgeMap[e];
   Entity *face1, *opVert;
-  Entity *tet = NULL; // TODO: change when BFaceMap is ready
+  Entity *tet = bFaceMap[face1].first;
+  bool dontInvert = bFaceMap[face1].second;
   face1 = bedge.face1;
   opVert = getTriVertOppositeEdge(m, bedge.face2, e);
   Entity* vs[4];
-  orientForBuild(m, opVert, face1, tet, true, vs);
+  orientForBuild(m, opVert, face1, tet, dontInvert, vs);
   apf::buildElement(m, NULL, apf::Mesh::TET, vs);
   // TODO: make changes in data structures
   // TODO: return appropriately
