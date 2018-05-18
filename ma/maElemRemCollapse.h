@@ -26,6 +26,7 @@ public:
 };
 
 typedef std::map<Entity*, BEdge> BEdgeMap;
+// The values correspond to <reference element, is ref elem positive>
 typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
 
 class ElemRemCollapse
