@@ -9,12 +9,10 @@
 
 namespace ma {
 
-typedef std::pair<Entity*, double> BEdge;
-
-class BEdge1
+class BEdge
 {
 public:
-  BEdge1()
+  BEdge()
   {
     edge = NULL;
     face1 = NULL;
@@ -27,7 +25,8 @@ public:
   double cda;
 };
 
-typedef std::map<Entity*, BEdge1> EdgeMap;
+typedef std::map<Entity*, BEdge> BEdgeMap;
+typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
 
 class ElemRemCollapse
 {
@@ -46,11 +45,12 @@ class ElemRemCollapse
   private:
     Adapt* adapter;
     Entity* inPoint;
-    EntityArray cavityEnts;
-    EntityArray boundaryEnts;
-    apf::DynamicArray<bool> cavEntPositive;
-    apf::DynamicArray<EntityArray> newEnts;
-    EdgeMap edgeMap;
+    EntityArray oldEnts;
+    /* EntityArray boundaryEnts; */
+    /* apf::DynamicArray<bool> cavEntPositive; */
+    BFaceMap bFaceMap;
+    EntityArray newEnts;
+    BEdgeMap bEdgeMap;
 };
 
 }
