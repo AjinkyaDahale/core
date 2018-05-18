@@ -36,7 +36,7 @@ class ElemRemCollapse
     bool setCavity(apf::DynamicArray<Entity*> elems);
     bool addElement(Entity* e);
 
-    bool removeEdge(Entity* e);
+    Entity* removeEdge(Entity* e);
 
     bool makeNewElements();
     void cancel();
@@ -46,8 +46,6 @@ class ElemRemCollapse
     Adapt* adapter;
     Entity* inPoint;
     EntityArray oldEnts;
-    /* EntityArray boundaryEnts; */
-    /* apf::DynamicArray<bool> cavEntPositive; */
     BFaceMap bFaceMap;
     EntityArray newEnts;
     BEdgeMap bEdgeMap;
