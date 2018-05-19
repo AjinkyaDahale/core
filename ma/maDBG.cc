@@ -1,11 +1,11 @@
-/****************************************************************************** 
+/******************************************************************************
 
-  Copyright 2013 Scientific Computation Research Center, 
+  Copyright 2013 Scientific Computation Research Center,
       Rensselaer Polytechnic Institute. All rights reserved.
-  
+
   The LICENSE file included with this distribution describes the terms
   of the SCOREC Non-Commercial License this program is distributed under.
- 
+
 *******************************************************************************/
 #include "maDBG.h"
 #include "maShape.h"
@@ -212,24 +212,27 @@ void dumpMeshWithFlag(ma::Adapt* a,
 
 void createCavityMesh(ma::Adapt* a,
     ma::EntityArray& tets,
-    const char* prefix)
+    const char* prefix,
+    int type)
 {
   ma::Mesh* m = a->mesh;
 
   gmi_register_null();
-  ma::Mesh* cavityMesh = apf::makeEmptyMdsMesh(gmi_load(".null"), 3, false);
+  ma::Mesh* cavityMesh = apf::makeEmptyMdsMesh(gmi_load(".null"),
+      apf::Mesh::typeDimension[type], false);
 
   size_t n = tets.getSize();
+  int nv = apf::Mesh::adjacentCount[type][0];
   for (size_t i = 0; i < n; ++i) {
-    ma::Entity* down[4];
-    ma::Entity* newVerts[4];
+    ma::Entity* down[nv];
+    ma::Entity* newVerts[nv];
     m->getDownward(tets[i], 0, down);
-    for (int j = 0; j < 4; j++) {
+    for (int j = 0; j < nv; j++) {
       ma::Vector position;
       m->getPoint(down[j], 0, position);
       newVerts[j] = cavityMesh->createVertex(NULL, position, ma::Vector(0,0,0));
     }
-    apf::buildElement(cavityMesh, NULL, apf::Mesh::TET, newVerts);
+    apf::buildElement(cavityMesh, NULL, type, newVerts);
   }
 
   cavityMesh->acceptChanges();
@@ -245,14 +248,15 @@ void createCavityMesh(ma::Adapt* a,
 
 void createCavityMesh(ma::Adapt* a,
     ma::EntitySet& tets,
-    const char* prefix)
+    const char* prefix,
+    int type)
 {
   ma::EntityArray tetsArray;
   tetsArray.setSize(tets.size());
   int count = 0;
   APF_ITERATE(ma::EntitySet,tets,it)
     tetsArray[count++] = *it;
-  createCavityMesh(a, tetsArray, prefix);
+  createCavityMesh(a, tetsArray, prefix, type);
 }
 
 
