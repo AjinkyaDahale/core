@@ -37,13 +37,20 @@ class ElemRemCollapse
     bool setCavity(apf::DynamicArray<Entity*> elems);
     bool addElement(Entity* e);
 
+    /** Only creates an element with the edge and adjacent
+	faces on cavity surface. May return NULL under certain circumstances.*/
     Entity* removeEdge(Entity* e);
+    /** Remove the highest dimension entity */
+    bool removeElement(Entity* e);
 
     bool makeNewElements();
     void cancel();
     void transfer();
     void destroyOldElements();
   private:
+    void markEdges(Mesh* m, Entity* face);
+    void unmarkEdges(Mesh* m, Entity* face);
+    
     Adapt* adapter;
     Entity* inPoint;
     EntityArray oldEnts;

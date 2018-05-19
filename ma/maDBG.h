@@ -54,11 +54,13 @@ void dumpMeshWithFlag(ma::Adapt* a,
 
 void createCavityMesh(ma::Adapt* a,
     ma::EntityArray& tets,
-    const char* prefix);
+    const char* prefix,
+    int type = apf::Mesh::TET);
 
 void createCavityMesh(ma::Adapt* a,
     ma::EntitySet& tets,
-    const char* prefix);
+    const char* prefix,
+    int type = apf::Mesh::TET);
 
 }
 #endif
