@@ -52,6 +52,16 @@ static double getCosDihedral(Mesh* m, Entity* edge,
   return norm1 * norm2;
 }
 
+static void showBFaces(Adapt* a, BFaceMap& bFaceMap, const char* name)
+{
+  EntityArray faces;
+  for (BFaceMap::iterator it = bFaceMap.begin(); it != bFaceMap.end(); ++it) {
+    faces.append(it->first);
+  }
+  ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
+  
+}
+
 ElemRemCollapse::ElemRemCollapse(Adapt* a):
 adapter(a)
 {
@@ -155,6 +165,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   }
 
   ma_dbg::createCavityMesh(adapter, elems, "the_cavity");
+  showBFaces(adapter, bFaceMap, "first_bfaces");
   ma_dbg::dumpMeshWithFlag(adapter, 0, 0, ma::MARKED, "MARKED", "marked_ents");
 
   return true;
@@ -190,6 +201,7 @@ bool ElemRemCollapse::removeElement(Entity* e)
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
   // TODO: mark this entity
   newEnts.append(e);
+  ma_dbg::createCavityMesh(adapter, newEnts, "cavity_now");
   setFlag(adapter, e, CAV_NEW);
   // TODO: switch marks on faces
   Entity* fs[4];
@@ -197,16 +209,15 @@ bool ElemRemCollapse::removeElement(Entity* e)
   for (int j = 0; j < 4; ++j) {
     setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
 
-    Entity* edges[3];
-    m->getDownward(fs[j], 1, edges);
-
+    if (!getFlag(adapter, fs[j], MARKED)){
+      bFaceMap.erase(fs[j]);
+      unmarkEdges(m, fs[j]);
+    }
+  }
+  for (int j = 0; j < 4; ++j) {
     if (getFlag(adapter, fs[j], MARKED)){
       bFaceMap[fs[j]] = std::make_pair(e, false);
       markEdges(m, fs[j]);
-    }
-    else {
-      bFaceMap.erase(fs[j]);
-      unmarkEdges(m, fs[j]);
     }
   }
   // TODO: change marks on edges
@@ -222,13 +233,23 @@ bool ElemRemCollapse::addElement(Entity* e)
 
 bool ElemRemCollapse::makeNewElements()
 {
+  size_t count =0;
   for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it) {
     Entity* newTet = removeEdge(it->first);
-    if (newTet) removeElement(newTet);
-    break;
+    if (newTet && adapter->shape->getQuality(newTet) > 0) {
+      removeElement(newTet);
+      it = bEdgeMap.begin();
+      std::stringstream ss;
+      count++;
+      ss << "bfaces_" << count;
+      showBFaces(adapter, bFaceMap, ss.str().c_str());
+    } else {
+      adapter->mesh->destroy(newTet);
+    }
   }
 
   ma_dbg::createCavityMesh(adapter, newEnts, "the_new_cavity");
+  showBFaces(adapter, bFaceMap, "final_bfaces");
 
   return false;
 }
