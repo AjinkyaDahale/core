@@ -52,11 +52,28 @@ class ElemRemCollapse
     void unmarkEdges(Mesh* m, Entity* face);
     
     Adapt* adapter;
-    Entity* inPoint;
     EntityArray oldEnts;
     BFaceMap bFaceMap;
     EntityArray newEnts;
+    EntityArray edgesInQueue, edgesPopped;
     BEdgeMap bEdgeMap;
+
+    class compareEdgeByCosAngle {
+    public:
+    compareEdgeByCosAngle(BEdgeMap& bEdgeMap) : _bEdgeMap(&bEdgeMap) {}
+      bool operator()(Entity* a, Entity* b)
+      {
+        // recall that this returns whether a compares _less_ that b, and
+        // and std::make_heap returns a _max_ heap
+        // if a is not on cavity boundary, pop it out first
+        if(_bEdgeMap->count(a) == 0) return false;
+        // likewise for b
+        if(_bEdgeMap->count(b) == 0) return true;
+        return (*_bEdgeMap)[a].cda < (*_bEdgeMap)[b].cda;
+      }
+    private:
+      BEdgeMap* const _bEdgeMap;
+    };
 };
 
 }
