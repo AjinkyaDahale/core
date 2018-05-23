@@ -40,6 +40,7 @@ class ElemRemCollapse
     /** Only creates an element with the edge and adjacent
 	faces on cavity surface. May return NULL under certain circumstances.*/
     Entity* removeEdge(Entity* e);
+    Entity* removeFace(Entity* e);
     /** Remove the highest dimension entity */
     bool removeElement(Entity* e);
 
@@ -55,7 +56,7 @@ class ElemRemCollapse
     EntityArray oldEnts;
     BFaceMap bFaceMap;
     EntityArray newEnts;
-    EntityArray edgesInQueue, edgesPopped;
+    EntityArray edgesInQueue;
     BEdgeMap bEdgeMap;
 
     class compareEdgeByCosAngle {
@@ -69,7 +70,7 @@ class ElemRemCollapse
         if(_bEdgeMap->count(a) == 0) return false;
         // likewise for b
         if(_bEdgeMap->count(b) == 0) return true;
-        return (*_bEdgeMap)[a].cda < (*_bEdgeMap)[b].cda;
+        return (*_bEdgeMap)[a].cda > (*_bEdgeMap)[b].cda;
       }
     private:
       BEdgeMap* const _bEdgeMap;
