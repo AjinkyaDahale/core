@@ -198,6 +198,35 @@ Entity* ElemRemCollapse::removeEdge(Entity* e)
   return newTet;
 }
 
+Entity* ElemRemCollapse::removeFace(Entity* face)
+{
+  Mesh* m = adapter->mesh;
+
+  PCU_ALWAYS_ASSERT(m->getType(face) == apf::Mesh::TRIANGLE);
+  PCU_ALWAYS_ASSERT(getFlag(adapter, face, MARKED));
+
+  Entity* edges[3];
+  m->getDownward(face, 1, edges);
+
+  Entity* result = NULL;
+  double qualityToBeat = adapter->input->validQuality;
+
+  for (int i = 0; i < 3; ++i) {
+    Entity* newTet = removeEdge(edges[i]);
+    if (!newTet) continue;
+    double newQual = adapter->shape->getQuality(newTet);
+    if (newQual > qualityToBeat){
+      if (result) adapter->mesh->destroy(result);
+      result = newTet;
+      qualityToBeat = newQual;
+    }
+    else
+      if (newTet && (result != newTet)) adapter->mesh->destroy(newTet);
+  }
+
+  return result;
+}
+
 bool ElemRemCollapse::removeElement(Entity* e)
 {
   Mesh* m = adapter->mesh;
@@ -237,6 +266,10 @@ bool ElemRemCollapse::makeNewElements()
 {
   size_t count =0;
   compareEdgeByCosAngle comp(bEdgeMap);
+  
+  std::stringstream ss;
+  ss << "bfaces_" << count;
+  showBFaces(adapter, bFaceMap, ss.str().c_str());
 
   // for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it)
   //   edgesInQueue.append(it->first);
@@ -248,20 +281,28 @@ bool ElemRemCollapse::makeNewElements()
        (first_it != last_it); ++it) {
     std::pop_heap(first_it, last_it--, comp);
     if (!getFlag(adapter, *last_it, MARKED)) continue;
-    Entity* newTet = removeEdge(*last_it);
-    if (newTet && adapter->shape->getQuality(newTet) > 0) {
+    Entity* newTet = removeFace(bEdgeMap[*last_it].face1);
+    if (!(newTet &&
+          (adapter->shape->getQuality(newTet) >
+           adapter->input->goodQuality))) {
+      if (newTet) adapter->mesh->destroy(newTet);
+      newTet = removeFace(bEdgeMap[*last_it].face2);
+    }
+    if (newTet &&
+        (adapter->shape->getQuality(newTet) >
+         adapter->input->goodQuality)) {
       removeElement(newTet);
       it = bEdgeMap.begin();
-      std::stringstream ss;
       // TODO: remove the ones not in bEdgeMap
       first_it = edgesInQueue.begin();
       last_it = edgesInQueue.end();
       std::make_heap(first_it, last_it, comp);
       count++;
+      std::stringstream ss;
       ss << "bfaces_" << count;
       showBFaces(adapter, bFaceMap, ss.str().c_str());
     } else {
-      adapter->mesh->destroy(newTet);
+      if (newTet) adapter->mesh->destroy(newTet);
     }
   }
 
