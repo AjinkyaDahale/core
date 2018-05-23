@@ -52,7 +52,7 @@ class ElemRemCollapse
     void destroyOldElements();
 
   private:
-    void markEdges(Mesh* m, Entity* face);
+    bool markEdges(Mesh* m, Entity* face, bool dryRun = false);
     void unmarkEdges(Mesh* m, Entity* face);
     
     Adapt* adapter;
