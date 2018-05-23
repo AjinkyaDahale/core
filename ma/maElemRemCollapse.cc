@@ -45,9 +45,13 @@ static double getCosDihedral(Mesh* m, Entity* edge,
 			     Entity* face2, Entity* tet2,
 			     const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
 {
+  PCU_ALWAYS_ASSERT(m->getType(face1) == apf::Mesh::TRIANGLE);
+  PCU_ALWAYS_ASSERT(m->getType(face2) == apf::Mesh::TRIANGLE);
+  PCU_ALWAYS_ASSERT(m->getType(tet1) == apf::Mesh::TET);
+  PCU_ALWAYS_ASSERT(m->getType(tet2) == apf::Mesh::TET);
   apf::Vector3 norm1 = computeFaceNormalAtEdgeInTet(m, tet1, face1, edge, Q);
   apf::Vector3 norm2 = computeFaceNormalAtEdgeInTet(m, tet2, face2, edge, Q);
-  // For now inverting one of the normals to get dihedral angle
+  // Inverting one of the normals to get dihedral angle
   norm2 = apf::Vector3(0.0, 0.0, 0.0) - norm2;
   return norm1 * norm2;
 }
@@ -86,11 +90,22 @@ void ElemRemCollapse::markEdges(Mesh* m, Entity* face)
       PCU_ALWAYS_ASSERT(!bEdgeMap[edges[k]].face2);
   Entity* face1 = bEdgeMap[edges[k]].face1;
       bEdgeMap[edges[k]].face2 = face;
-      bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k], face, bFaceMap[face].first,
+      bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k],
+                                              face, bFaceMap[face].first,
                                               face1, bFaceMap[face1].first);
       // The `!=` acts as XOR. We invert if exactly one of the reference elements is negative
       if (bFaceMap[face1].second != bFaceMap[face].second)
         bEdgeMap[edges[k]].cda *= -1;
+
+      // TODO: is there a better way to compute angles than making the element
+      // If element made is negative, the dihedral angle > pi
+      Entity* tryEnt = removeEdge(edges[k]);
+      if (!(tryEnt &&
+            (adapter->shape->getQuality(tryEnt) >
+             adapter->input->goodQuality))) {
+        bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
+      }
+      if (tryEnt) destroyElement(adapter, tryEnt);
     }
   }
 }
@@ -133,7 +148,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
     PCU_ALWAYS_ASSERT_VERBOSE(apf::Mesh::typeDimension[m->getType(elems[i])] == d,
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
     setFlag(adapter, elems[i], CAV_OLD);
-    oldEnts.append(elems[i]);
+    oldEnts[i] = elems[i];
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
     for (int j = 0; j < numBs; ++j) {
@@ -189,10 +204,15 @@ Entity* ElemRemCollapse::removeEdge(Entity* e)
 
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
+  // If an element already exists, it was either added to the cavity,
+  // or is outside of it. In either case, removing it causes
+  // complications.
+  if(apf::findElement(m, apf::Mesh::TET, vs))
+    return NULL;
   Entity* newTet = buildElement(adapter, NULL, apf::Mesh::TET, vs);
   if(findTetRotation(m, newTet, vs) == -1) {
     // The vertex ordering of returned element is negative of desired.
-    // This might be because an element as such already exists.
+    // Scrapping the operation.
     newTet = NULL;
   }
   return newTet;
@@ -216,12 +236,12 @@ Entity* ElemRemCollapse::removeFace(Entity* face)
     if (!newTet) continue;
     double newQual = adapter->shape->getQuality(newTet);
     if (newQual > qualityToBeat){
-      if (result) adapter->mesh->destroy(result);
+      if (result) destroyElement(adapter, result);
       result = newTet;
       qualityToBeat = newQual;
     }
     else
-      if (newTet && (result != newTet)) adapter->mesh->destroy(newTet);
+      if (newTet && (result != newTet)) destroyElement(adapter, newTet);
   }
 
   return result;
@@ -285,7 +305,7 @@ bool ElemRemCollapse::makeNewElements()
     if (!(newTet &&
           (adapter->shape->getQuality(newTet) >
            adapter->input->goodQuality))) {
-      if (newTet) adapter->mesh->destroy(newTet);
+      if (newTet) destroyElement(adapter, newTet);
       newTet = removeFace(bEdgeMap[*last_it].face2);
     }
     if (newTet &&
@@ -302,7 +322,7 @@ bool ElemRemCollapse::makeNewElements()
       ss << "bfaces_" << count;
       showBFaces(adapter, bFaceMap, ss.str().c_str());
     } else {
-      if (newTet) adapter->mesh->destroy(newTet);
+      if (newTet) destroyElement(adapter, newTet);
     }
   }
 
