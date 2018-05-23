@@ -40,6 +40,8 @@ class ElemRemCollapse
     /** Only creates an element with the edge and adjacent
 	faces on cavity surface. May return NULL under certain circumstances.*/
     Entity* removeEdge(Entity* e);
+    /** Removes an element determined by the given face on cavity boundary
+        and another cavity boundary face sharing an edge with it. */ 
     Entity* removeFace(Entity* e);
     /** Remove the highest dimension entity */
     bool removeElement(Entity* e);
@@ -48,6 +50,7 @@ class ElemRemCollapse
     void cancel();
     void transfer();
     void destroyOldElements();
+
   private:
     void markEdges(Mesh* m, Entity* face);
     void unmarkEdges(Mesh* m, Entity* face);
