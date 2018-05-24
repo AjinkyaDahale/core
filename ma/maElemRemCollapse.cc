@@ -34,8 +34,9 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
   PCU_ALWAYS_ASSERT((fvi[1]==vs[1])||(fvi[1]==vs[2]));
   PCU_ALWAYS_ASSERT((fvi[2]==vs[1])||(fvi[2]==vs[2]));
   if (!dontInvert) {
-    vs[1] = fvi[2];
-    vs[2] = fvi[1];
+    Entity* temp_v = vs[1];
+    vs[1] = vs[2];
+    vs[2] = temp_v;
   }
 }
 
@@ -86,7 +87,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       be1.face1 = face;
       bEdgeMap[edges[k]] = be1;
       setFlag(adapter, edges[k], MARKED);
-      edgesInQueue.append(edges[k]);
+      edgesInQueue.push_back(edges[k]);
     } else {
       PCU_DEBUG_ASSERT(bEdgeMap.count(edges[k]) > 0);
       PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1);
@@ -327,11 +328,10 @@ bool ElemRemCollapse::makeNewElements()
   //   edgesInQueue.append(it->first);
   std::make_heap(edgesInQueue.begin(), edgesInQueue.end(), comp);
 
-  Entity **first_it = edgesInQueue.begin();
-  Entity **last_it = edgesInQueue.end();
+  std::vector<Entity*>::iterator first_it = edgesInQueue.begin();
+  std::vector<Entity*>::iterator last_it = edgesInQueue.end();
 
-  for (BEdgeMap::iterator it = bEdgeMap.begin();
-       (first_it != last_it); ++it) {
+  for (; (first_it != last_it);) {
     std::pop_heap(first_it, last_it--, comp);
     if (!getFlag(adapter, *last_it, MARKED)) continue;
     bool elementRemoved = false;
@@ -360,7 +360,6 @@ bool ElemRemCollapse::makeNewElements()
     }
 
     if (elementRemoved) {
-      it = bEdgeMap.begin();
       // TODO: remove the ones not in bEdgeMap
       first_it = edgesInQueue.begin();
       last_it = edgesInQueue.end();
