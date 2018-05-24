@@ -59,7 +59,7 @@ class ElemRemCollapse
     EntityArray oldEnts;
     BFaceMap bFaceMap;
     EntityArray newEnts;
-    EntityArray edgesInQueue;
+    std::vector<Entity*> edgesInQueue;
     BEdgeMap bEdgeMap;
 
     class compareEdgeByCosAngle {
