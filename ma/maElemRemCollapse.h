@@ -35,7 +35,7 @@ class ElemRemCollapse
     ElemRemCollapse(Adapt* a);
 
     bool setCavity(apf::DynamicArray<Entity*> elems);
-    bool addElement(Entity* e);
+    bool addElement(Entity* e, bool isOld = false);
 
     /** Only creates an element with the edge and adjacent
 	faces on cavity surface. May return NULL under certain circumstances.*/

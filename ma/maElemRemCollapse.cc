@@ -60,8 +60,11 @@ static double getCosDihedral(Mesh* m, Entity* edge,
 static void showBFaces(Adapt* a, BFaceMap& bFaceMap, const char* name)
 {
   EntityArray faces;
+  faces.setSize(bFaceMap.size());
+  size_t i = 0;
   for (BFaceMap::iterator it = bFaceMap.begin(); it != bFaceMap.end(); ++it) {
-    faces.append(it->first);
+    faces[i] = it->first;
+    ++i;
   }
   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
   
@@ -285,6 +288,7 @@ bool ElemRemCollapse::removeElement(Entity* e)
 {
   Mesh* m = adapter->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
+  PCU_ALWAYS_ASSERT(!getFlag(adapter, e, CAV_NEW));
   // TODO: mark this entity
   Entity* fs[4];
   m->getDownward(e, 2, fs);
@@ -325,6 +329,12 @@ bool ElemRemCollapse::removeElement(Entity* e)
 
   newEnts.insert(e);
   if (canMark) {
+    // if (!areNewAnglesGood) {
+    //   // There are some bad angles introduced, try to undo
+    //   if (addElement(e))
+    //     return false;
+    //   // If failed: what's done is done, go forward
+    // }
     ma_dbg::createCavityMesh(adapter, newEnts, "cavity_now");
     setFlag(adapter, e, CAV_NEW);
   } else {
@@ -332,14 +342,59 @@ bool ElemRemCollapse::removeElement(Entity* e)
     // destroyElement(adapter, e);
   }
   
-  return canMark && areNewAnglesGood;
+  return canMark;
 }
 
-bool ElemRemCollapse::addElement(Entity* e)
+bool ElemRemCollapse::addElement(Entity* e, bool isOld)
 {
   Mesh* m = adapter->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
-  return false;
+
+  Entity* fs[4];
+  m->getDownward(e, 2, fs);
+
+  for (int j = 0; j < 4; ++j) {
+    // switch marks on faces
+    setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+
+    if (!getFlag(adapter, fs[j], MARKED)){
+      unmarkEdges(m, fs[j]);
+    }
+  }
+
+  bool canMark = true;
+  for (int j = 0; j < 4; ++j) {
+    if (getFlag(adapter, fs[j], MARKED)){
+      canMark = canMark && markEdges(m, fs[j], true);
+    }
+  }
+
+  if (!canMark) {
+    for (int j = 0; j < 4; ++j) {
+      // Switch-back marks on faces
+      setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+    }
+  }
+
+  for (int j = 0; j < 4; ++j) {
+    if (getFlag(adapter, fs[j], MARKED)) {
+      if (canMark)
+        bFaceMap[fs[j]] = std::make_pair(e, canMark);
+      markEdges(m, fs[j]);
+    } else {
+      bFaceMap.erase(fs[j]);
+    }
+  }
+  
+  oldEnts.insert(e);
+  if (isOld) setFlag(adapter, e, CAV_OLD);
+  if (canMark) {
+    clearFlag(adapter, e, CAV_NEW);
+  } else {
+    newEnts.insert(e);
+  }
+
+  return canMark;
 }
 
 bool ElemRemCollapse::makeNewElements()
