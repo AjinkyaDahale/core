@@ -107,13 +107,14 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
 
       // TODO: is there a better way to compute angles than making the element
       // If element made is negative, the dihedral angle > pi
-      Entity* tryEnt = removeEdge(edges[k]);
+      bool tryEntMade;
+      Entity* tryEnt = removeEdge(edges[k], &tryEntMade);
       if (!(tryEnt &&
             (adapter->shape->getQuality(tryEnt) >
-             adapter->input->goodQuality))) {
+             adapter->input->validQuality))) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
       }
-      if (tryEnt) destroyElement(adapter, tryEnt);
+      if (tryEnt && tryEntMade) destroyElement(adapter, tryEnt);
     }
   }
   return true;
@@ -195,7 +196,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   return true;
 }
 
-Entity* ElemRemCollapse::removeEdge(Entity* e)
+Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
 {
   Mesh* m = adapter->mesh;
 
@@ -216,9 +217,19 @@ Entity* ElemRemCollapse::removeEdge(Entity* e)
   // If an element already exists, it was either added to the cavity,
   // or is outside of it. In either case, removing it causes
   // complications.
-  if(apf::findElement(m, apf::Mesh::TET, vs))
-    return NULL;
-  Entity* newTet = buildElement(adapter, NULL, apf::Mesh::TET, vs);
+  Entity* newTet = apf::findElement(m, apf::Mesh::TET, vs);
+  if (newTet) {
+    if (elemMade) *elemMade = false;
+    if(findTetRotation(m, newTet, vs) == -1) {
+      // The vertex ordering of returned element is negative of desired.
+      // Scrapping the operation.
+      return NULL;
+    } else {
+      return newTet;
+    }
+  }
+  newTet = buildElement(adapter, NULL, apf::Mesh::TET, vs);
+  if (elemMade) *elemMade = true;
   if(findTetRotation(m, newTet, vs) == -1) {
     // The vertex ordering of returned element is negative of desired.
     // Scrapping the operation.
@@ -227,7 +238,7 @@ Entity* ElemRemCollapse::removeEdge(Entity* e)
   return newTet;
 }
 
-Entity* ElemRemCollapse::removeFace(Entity* face)
+Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
 {
   Mesh* m = adapter->mesh;
 
@@ -237,21 +248,27 @@ Entity* ElemRemCollapse::removeFace(Entity* face)
   Entity* edges[3];
   m->getDownward(face, 1, edges);
 
+  bool resultMade = false;
   Entity* result = NULL;
   double qualityToBeat = adapter->input->validQuality;
 
   for (int i = 0; i < 3; ++i) {
-    Entity* newTet = removeEdge(edges[i]);
+    bool newTetMade;
+    Entity* newTet = removeEdge(edges[i], &newTetMade);
     if (!newTet) continue;
     double newQual = adapter->shape->getQuality(newTet);
     if (newQual > qualityToBeat){
-      if (result) destroyElement(adapter, result);
+      if (result && resultMade) destroyElement(adapter, result);
       result = newTet;
+      resultMade = newTetMade;
       qualityToBeat = newQual;
     }
     else
-      if (newTet && (result != newTet)) destroyElement(adapter, newTet);
+      if (newTet && (result != newTet) && newTetMade)
+        destroyElement(adapter, newTet);
   }
+
+  if (elemMade) *elemMade = resultMade;
 
   return result;
 }
@@ -337,25 +354,26 @@ bool ElemRemCollapse::makeNewElements()
     bool elementRemoved = false;
     Entity *face1 = bEdgeMap[*last_it].face1;
     Entity *face2 = bEdgeMap[*last_it].face2;
-    Entity* newTet = removeFace(face1);
+    bool newTetMade;
+    Entity* newTet = removeFace(face1, &newTetMade);
 
     if (newTet &&
         (adapter->shape->getQuality(newTet) >
          adapter->input->goodQuality)) {
       elementRemoved = elementRemoved || removeElement(newTet);
     } else {
-      if (newTet) destroyElement(adapter, newTet);
+      if (newTet && newTetMade) destroyElement(adapter, newTet);
     }
 
     if (!elementRemoved) {
-      newTet = removeFace(face2);
+      newTet = removeFace(face2, &newTetMade);
 
       if (newTet &&
           (adapter->shape->getQuality(newTet) >
            adapter->input->goodQuality)) {
         elementRemoved = elementRemoved || removeElement(newTet);
       } else {
-        if (newTet) destroyElement(adapter, newTet);
+        if (newTet && newTetMade) destroyElement(adapter, newTet);
       }
     }
 
