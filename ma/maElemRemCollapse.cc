@@ -57,12 +57,13 @@ static double getCosDihedral(Mesh* m, Entity* edge,
   return norm1 * norm2;
 }
 
-static void showBFaces(Adapt* a, BFaceMap& bFaceMap, const char* name)
+static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
 {
   EntityArray faces;
   faces.setSize(bFaceMap.size());
   size_t i = 0;
-  for (BFaceMap::iterator it = bFaceMap.begin(); it != bFaceMap.end(); ++it) {
+  for (BFaceMap::const_iterator it = bFaceMap.begin();
+       it != bFaceMap.end(); ++it) {
     faces[i] = it->first;
     ++i;
   }
@@ -92,7 +93,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       be1.face1 = face;
       bEdgeMap[edges[k]] = be1;
       setFlag(adapter, edges[k], MARKED);
-      edgesInQueue.push_back(edges[k]);
+      // edgesInQueue.push_back(edges[k]);
     } else {
       PCU_DEBUG_ASSERT(bEdgeMap.count(edges[k]) > 0);
       PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1);
@@ -390,26 +391,36 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
 
 bool ElemRemCollapse::makeNewElements()
 {
-  size_t count =0;
+  size_t count = 0;
   compareEdgeByCosAngle comp(bEdgeMap);
   
   std::stringstream ss;
   ss << "bfaces_" << count;
   showBFaces(adapter, bFaceMap, ss.str().c_str());
-
-  // for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it)
-  //   edgesInQueue.append(it->first);
-  std::make_heap(edgesInQueue.begin(), edgesInQueue.end(), comp);
+  // at worst during marking, all the tet's edges will be added.
+  edgesInQueue.reserve(edgesInQueue.size()+6);
+  
+  edgesInQueue.clear();
+  for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it)
+    edgesInQueue.push_back(it->first);
 
   std::vector<Entity*>::iterator first_it = edgesInQueue.begin();
   std::vector<Entity*>::iterator last_it = edgesInQueue.end();
 
+  std::make_heap(first_it, last_it, comp);
+
   for (; (first_it != last_it);) {
-    std::pop_heap(first_it, last_it--, comp);
-    if (!getFlag(adapter, *last_it, MARKED)) continue;
+    std::pop_heap(first_it, last_it, comp);
+    Entity* edge = edgesInQueue.back();
+    edgesInQueue.pop_back();
+    first_it = edgesInQueue.begin();
+    last_it = edgesInQueue.end();
+
+    if (!getFlag(adapter, edge, MARKED)) continue;
+
     bool elementRemoved = false;
-    Entity *face1 = bEdgeMap[*last_it].face1;
-    Entity *face2 = bEdgeMap[*last_it].face2;
+    Entity* face1 = bEdgeMap[edge].face1;
+    Entity* face2 = bEdgeMap[edge].face2;
     bool newTetMade;
     Entity* newTet = removeFace(face1, &newTetMade);
 
@@ -434,7 +445,10 @@ bool ElemRemCollapse::makeNewElements()
     }
 
     if (elementRemoved) {
-      // TODO: remove the ones not in bEdgeMap
+      edgesInQueue.clear();
+      for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it)
+        edgesInQueue.push_back(it->first);
+
       first_it = edgesInQueue.begin();
       last_it = edgesInQueue.end();
       std::make_heap(first_it, last_it, comp);
