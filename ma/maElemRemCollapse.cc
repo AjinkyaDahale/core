@@ -155,19 +155,18 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
 {
   int numElems = elems.getSize();
   PCU_ALWAYS_ASSERT(numElems);
-  oldEnts.setSize(numElems);
   Mesh* m = adapter->mesh;
   int d = m->getDimension();
   // int bcount = 0;
   // Entity* b;
   apf::Downward bs;
 
+  oldEnts.insert(elems.begin(), elems.end());
   // "Dry run" to mark all boundary faces
   for (int i = 0; i < numElems; ++i) {
     PCU_ALWAYS_ASSERT_VERBOSE(apf::Mesh::typeDimension[m->getType(elems[i])] == d,
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
     setFlag(adapter, elems[i], CAV_OLD);
-    oldEnts[i] = elems[i];
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
     for (int j = 0; j < numBs; ++j) {
@@ -318,19 +317,20 @@ bool ElemRemCollapse::removeElement(Entity* e)
     if (getFlag(adapter, fs[j], MARKED)){
       if (canMark)
         bFaceMap[fs[j]] = std::make_pair(e, !canMark);
-      areNewAnglesGood = areNewAnglesGood && markEdges(m, fs[j]);
+      areNewAnglesGood = markEdges(m, fs[j]) && areNewAnglesGood;
     } else {
       bFaceMap.erase(fs[j]);
     }
   }
 
+  newEnts.insert(e);
   if (canMark) {
-    newEnts.append(e);
     ma_dbg::createCavityMesh(adapter, newEnts, "cavity_now");
     setFlag(adapter, e, CAV_NEW);
-  } // else {
-  //   destroyElement(adapter, e);
-  // }
+  } else {
+    oldEnts.insert(e);
+    // destroyElement(adapter, e);
+  }
   
   return canMark && areNewAnglesGood;
 }
