@@ -56,11 +56,11 @@ class ElemRemCollapse
     void unmarkEdges(Mesh* m, Entity* face);
     
     Adapt* adapter;
-    EntityArray oldEnts;
-    BFaceMap bFaceMap;
-    EntityArray newEnts;
-    std::vector<Entity*> edgesInQueue;
+    EntitySet oldEnts;
+    EntitySet newEnts;
     BEdgeMap bEdgeMap;
+    BFaceMap bFaceMap;
+    std::vector<Entity*> edgesInQueue;
 
     class compareEdgeByCosAngle {
     public:
