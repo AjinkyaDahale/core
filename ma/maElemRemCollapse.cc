@@ -77,6 +77,8 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
   Entity* edges[3];
   m->getDownward(face, 1, edges);
 
+  bool areNewAnglesGood = true;
+
   for (int k = 0; k < 3; k++) {
     if(!getFlag(adapter, edges[k], MARKED)) {
       PCU_ALWAYS_ASSERT(bEdgeMap.count(edges[k]) == 0);
@@ -109,15 +111,22 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       // If element made is negative, the dihedral angle > pi
       bool tryEntMade;
       Entity* tryEnt = removeEdge(edges[k], &tryEntMade);
-      if (!(tryEnt &&
-            (adapter->shape->getQuality(tryEnt) >
-             adapter->input->validQuality))) {
+      double tryEntQual = -1;
+      if (tryEnt)
+        tryEntQual = adapter->shape->getQuality(tryEnt);
+      if (tryEntQual < adapter->input->validQuality) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
+      } else if (tryEntQual < adapter->input->goodQuality) {
+        areNewAnglesGood = false;
       }
       if (tryEnt && tryEntMade) destroyElement(adapter, tryEnt);
     }
   }
-  return true;
+
+  if (dryRun)
+    return true;
+  else
+    return areNewAnglesGood;
 }
 
 void ElemRemCollapse::unmarkEdges(Mesh* m, Entity* face)
@@ -304,11 +313,12 @@ bool ElemRemCollapse::removeElement(Entity* e)
     }
   }
 
+  bool areNewAnglesGood = true;
   for (int j = 0; j < 4; ++j) {
     if (getFlag(adapter, fs[j], MARKED)){
       if (canMark)
         bFaceMap[fs[j]] = std::make_pair(e, !canMark);
-      markEdges(m, fs[j]);
+      areNewAnglesGood = areNewAnglesGood && markEdges(m, fs[j]);
     } else {
       bFaceMap.erase(fs[j]);
     }
@@ -322,7 +332,7 @@ bool ElemRemCollapse::removeElement(Entity* e)
   //   destroyElement(adapter, e);
   // }
   
-  return canMark;
+  return canMark && areNewAnglesGood;
 }
 
 bool ElemRemCollapse::addElement(Entity* e)
