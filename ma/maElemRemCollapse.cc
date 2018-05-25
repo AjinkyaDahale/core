@@ -188,21 +188,12 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
         bFaceMap[bs[j]] = std::make_pair(elems[i], true);
 
 	markEdges(m, bs[j]);
-	
-        // This one's just during the debug phase, because
-        // fields on faces aren't written to VTK
-        Entity* vs[3];
-        m->getDownward(bs[j], 0, vs);
-        for (int k = 0; k < 3; k++) {
-          setFlags(adapter, vs[k], MARKED);
-        }
       }
     }
   }
 
   ma_dbg::createCavityMesh(adapter, elems, "the_cavity");
   showBFaces(adapter, bFaceMap, "first_bfaces");
-  ma_dbg::dumpMeshWithFlag(adapter, 0, 0, ma::MARKED, "MARKED", "marked_ents");
 
   return true;
 }
