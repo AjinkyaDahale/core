@@ -467,14 +467,53 @@ bool ElemRemCollapse::makeNewElements()
 
 void ElemRemCollapse::cancel()
 {
+  destroyNewElements();
+  unmark();
+  bEdgeMap.clear();
+  bFaceMap.clear();
+  oldEnts.clear();
+  newEnts.clear();
+  edgesInQueue.clear();
 }
 
 void ElemRemCollapse::transfer()
 {
+  // keeping as placeholder for whenever element insertion is used
+}
+
+void ElemRemCollapse::unmark()
+{
+  APF_ITERATE(BEdgeMap,bEdgeMap,it) {
+    clearFlag(adapter, it->first, MARKED);
+  }
+
+  APF_ITERATE(BFaceMap,bFaceMap,it) {
+    clearFlag(adapter, it->first, MARKED);
+  }
+
+  APF_ITERATE(EntitySet,oldEnts,it) {
+    clearFlag(adapter, *it, CAV_OLD);
+    clearFlag(adapter, *it, CAV_NEW);
+  }
+
+  APF_ITERATE(EntitySet,newEnts,it) {
+    clearFlag(adapter, *it, CAV_OLD);
+    clearFlag(adapter, *it, CAV_NEW);
+  }
 }
 
 void ElemRemCollapse::destroyOldElements()
 {
+  APF_ITERATE(ma::EntitySet,oldEnts,it)
+    if (!getFlag(adapter, *it, CAV_NEW))
+      destroyElement(adapter, *it);
+}
+
+void ElemRemCollapse::destroyNewElements()
+{
+  APF_ITERATE(ma::EntitySet,newEnts,it)
+    if (!getFlag(adapter, *it, CAV_OLD))
+      destroyElement(adapter, *it);
 }
 
 }
