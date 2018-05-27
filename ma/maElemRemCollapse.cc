@@ -42,9 +42,9 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
 
 // TODO: Might as well use apf::getFaceFaceAngleInTet()
 static double getCosDihedral(Mesh* m, Entity* edge,
-			     Entity* face1, Entity* tet1,
-			     Entity* face2, Entity* tet2,
-			     const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+                             Entity* face1, Entity* tet1,
+                             Entity* face2, Entity* tet2,
+                             const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
 {
   PCU_ALWAYS_ASSERT(m->getType(face1) == apf::Mesh::TRIANGLE);
   PCU_ALWAYS_ASSERT(m->getType(face2) == apf::Mesh::TRIANGLE);
@@ -97,6 +97,83 @@ static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
       return NULL;
   }
   return newTet;
+}
+
+static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
+{
+  Mesh* m = a->mesh;
+  Entity* fvi[3];
+  Entity* evi[2];
+  m->getDownward(edge, 0, evi);
+  m->getDownward(face, 0, fvi);
+
+  if (findIn(fvi, 3, evi[0])!=-1 || findIn(fvi, 3, evi[1])!=-1)
+    return false;
+
+  double qs[5], qv = a->input->validQuality;
+  Entity* tets[5];
+  bool elemsMade[5], elemsInverted[5];
+  Entity* vs[4];
+
+  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
+  tets[0] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[0], &elemsInverted[0]);
+  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
+  tets[1] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[1], &elemsInverted[1]);
+
+  for (size_t i = 0; i < 2; ++i) {
+    qs[i] = a->shape->getQuality(tets[i]);
+    if (elemsInverted[i]) qs[i] *= -1;
+    if (elemsMade[i]) destroyElement(a, tets[i]);
+  }
+
+  bool intersect = ((qs[0] < -qv) && (qs[1] > qv)) || ((qs[0] > qv) && (qs[1] < -qv));
+  intersect = intersect || ((qs[0] < qv) && (qs[0] > -qv));
+  intersect = intersect || ((qs[1] < qv) && (qs[1] > -qv));
+
+  // If both verts of the edge are on the same side of the face,
+  // they're not going to intersect.
+  if (!intersect) return intersect;
+
+  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = evi[0]; vs[3] = evi[1];
+  tets[2] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[2], &elemsInverted[2]);
+  vs[0] = fvi[1]; vs[1] = fvi[2]; vs[2] = evi[0]; vs[3] = evi[1];
+  tets[3] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[3], &elemsInverted[3]);
+  vs[0] = fvi[2]; vs[1] = fvi[0]; vs[2] = evi[0]; vs[3] = evi[1];
+  tets[4] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[4], &elemsInverted[4]);
+
+  for (size_t i = 2; i < 5; ++i) {
+    qs[i] = a->shape->getQuality(tets[i]);
+    if (elemsInverted[i]) qs[i] *= -1;
+    if (elemsMade[i]) destroyElement(a, tets[i]);
+  }
+
+  intersect = intersect && 
+    (((qs[2] > qv) && (qs[3] > qv) && (qs[4] > qv)) ||
+     ((qs[2] < -qv) && (qs[3] < -qv) && (qs[4] < -qv)) ||
+     ((qs[2] < qv) && (qs[2] > -qv)) ||
+     ((qs[3] < qv) && (qs[3] > -qv)) ||
+     ((qs[4] < qv) && (qs[4] > -qv)));
+
+  // TODO: Still leaves out situations where edge and face
+  // are on same plane
+  return intersect;
+}
+
+static bool newTetClear(Adapt* a, Entity* tet, BEdgeMap bEdgeMap)
+{
+  Mesh* m = a->mesh;
+  Entity* fs[4];
+  m->getDownward(tet, 2, fs);
+
+  for (size_t i = 0; i < 4; ++i) {
+    if (getFlag(a, fs[i], MARKED)) continue;
+    APF_ITERATE(BEdgeMap,bEdgeMap,it) {
+      if (edgeIntersectsFace(a, fs[i], it->first))
+        return false;
+    }
+  }
+
+  return true;
 }
 
 ElemRemCollapse::ElemRemCollapse(Adapt* a):
@@ -171,9 +248,9 @@ void ElemRemCollapse::unmarkEdges(Mesh* m, Entity* face)
     if (bEdgeMap[edges[k]].face2){
       // Ensuring that face1 survives
       if (bEdgeMap[edges[k]].face1 == face){
-	bEdgeMap[edges[k]].face1 = bEdgeMap[edges[k]].face2;
+        bEdgeMap[edges[k]].face1 = bEdgeMap[edges[k]].face2;
       } else
-	PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face2 == face);
+        PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face2 == face);
       bEdgeMap[edges[k]].face2 = NULL;
     } else {
       PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1 == face);
@@ -216,7 +293,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
         PCU_ALWAYS_ASSERT(bFaceMap.count(bs[j]) == 0);
         bFaceMap[bs[j]] = std::make_pair(elems[i], true);
 
-	markEdges(m, bs[j]);
+        markEdges(m, bs[j]);
       }
     }
   }
@@ -293,6 +370,11 @@ bool ElemRemCollapse::removeElement(Entity* e)
   Entity* fs[4];
   m->getDownward(e, 2, fs);
 
+  newEnts.insert(e);
+
+  if (!newTetClear(adapter, e, bEdgeMap))
+    return false;
+
   for (int j = 0; j < 4; ++j) {
     // switch marks on faces
     setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
@@ -327,7 +409,6 @@ bool ElemRemCollapse::removeElement(Entity* e)
     }
   }
 
-  newEnts.insert(e);
   if (canMark) {
     // if (!areNewAnglesGood) {
     //   // There are some bad angles introduced, try to undo
