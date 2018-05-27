@@ -71,6 +71,34 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
   
 }
 
+static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
+                           bool* elemMade, bool* elemInverted=NULL)
+{
+  Mesh* m = a->mesh;
+
+  // If an element already exists, it was either added to the cavity,
+  // or is outside of it. In either case, removing it causes
+  // complications.
+  Entity* newTet = apf::findElement(m, type, vs);
+  if (newTet) {
+    if (elemMade) *elemMade = false;
+  } else {
+    newTet = buildElement(a, c, type, vs);
+    if (elemMade) *elemMade = true;
+  }
+
+  if (elemInverted) *elemInverted = false;
+  if (findTetRotation(m, newTet, vs) == -1) {
+    // The vertex ordering of returned element is negative of desired.
+    // Scrapping the operation.
+    if (elemInverted)
+      *elemInverted = true;
+    else
+      return NULL;
+  }
+  return newTet;
+}
+
 ElemRemCollapse::ElemRemCollapse(Adapt* a):
 adapter(a)
 {
@@ -217,28 +245,8 @@ Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
 
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
-  // If an element already exists, it was either added to the cavity,
-  // or is outside of it. In either case, removing it causes
-  // complications.
-  Entity* newTet = apf::findElement(m, apf::Mesh::TET, vs);
-  if (newTet) {
-    if (elemMade) *elemMade = false;
-    if(findTetRotation(m, newTet, vs) == -1) {
-      // The vertex ordering of returned element is negative of desired.
-      // Scrapping the operation.
-      return NULL;
-    } else {
-      return newTet;
-    }
-  }
-  newTet = buildElement(adapter, NULL, apf::Mesh::TET, vs);
-  if (elemMade) *elemMade = true;
-  if(findTetRotation(m, newTet, vs) == -1) {
-    // The vertex ordering of returned element is negative of desired.
-    // Scrapping the operation.
-    newTet = NULL;
-  }
-  return newTet;
+
+  return buildOrFind(adapter, NULL, apf::Mesh::TET, vs, elemMade, NULL);
 }
 
 Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
