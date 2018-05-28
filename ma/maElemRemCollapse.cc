@@ -68,7 +68,6 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
     ++i;
   }
   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
-  
 }
 
 static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
@@ -149,10 +148,7 @@ static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
 
   intersect = intersect && 
     (((qs[2] > qv) && (qs[3] > qv) && (qs[4] > qv)) ||
-     ((qs[2] < -qv) && (qs[3] < -qv) && (qs[4] < -qv)) ||
-     ((qs[2] < qv) && (qs[2] > -qv)) ||
-     ((qs[3] < qv) && (qs[3] > -qv)) ||
-     ((qs[4] < qv) && (qs[4] > -qv)));
+     ((qs[2] < -qv) && (qs[3] < -qv) && (qs[4] < -qv)));
 
   // TODO: Still leaves out situations where edge and face
   // are on same plane
