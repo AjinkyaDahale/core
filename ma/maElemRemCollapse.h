@@ -59,6 +59,8 @@ class ElemRemCollapse
     void unmarkEdges(Mesh* m, Entity* face);
 
     Adapt* adapter;
+    apf::ModelEntity* modelEnt;
+    
     EntitySet oldEnts;
     EntitySet newEnts;
     BEdgeMap bEdgeMap;

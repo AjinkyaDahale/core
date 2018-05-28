@@ -70,6 +70,21 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
 }
 
+static void showNewEnts(Adapt* a, const EntitySet& newEnts, const char* name)
+{
+  EntityArray tets;
+  tets.setSize(newEnts.size());
+  size_t i = 0;
+  APF_ITERATE(EntitySet,newEnts,it) {
+    if (getFlag(a, *it, CAV_NEW)) {
+      tets[i] = *it;
+      ++i;
+    }
+  }
+  tets.setSize(i);
+  ma_dbg::createCavityMesh(a, tets, name, apf::Mesh::TET);
+}
+
 static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
                            bool* elemMade, bool* elemInverted=NULL)
 {
@@ -266,11 +281,15 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   // Entity* b;
   apf::Downward bs;
 
+  modelEnt = m->toModel(elems[0]);
+
   oldEnts.insert(elems.begin(), elems.end());
   // "Dry run" to mark all boundary faces
   for (int i = 0; i < numElems; ++i) {
     PCU_ALWAYS_ASSERT_VERBOSE(apf::Mesh::typeDimension[m->getType(elems[i])] == d,
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
+    // We do not want to cross model region boundaries
+    if (m->toModel(elems[i]) != modelEnt) continue;
     setFlag(adapter, elems[i], CAV_OLD);
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
@@ -319,7 +338,7 @@ Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
 
-  return buildOrFind(adapter, NULL, apf::Mesh::TET, vs, elemMade, NULL);
+  return buildOrFind(adapter, modelEnt, apf::Mesh::TET, vs, elemMade, NULL);
 }
 
 Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
@@ -368,8 +387,10 @@ bool ElemRemCollapse::removeElement(Entity* e)
 
   newEnts.insert(e);
 
-  if (!newTetClear(adapter, e, bEdgeMap))
+  if (!newTetClear(adapter, e, bEdgeMap)) {
+    oldEnts.insert(e);
     return false;
+  }
 
   for (int j = 0; j < 4; ++j) {
     // switch marks on faces
@@ -544,10 +565,10 @@ bool ElemRemCollapse::makeNewElements()
     }
   }
 
-  ma_dbg::createCavityMesh(adapter, newEnts, "the_new_cavity");
+  showNewEnts(adapter, newEnts, "the_new_cavity");
   showBFaces(adapter, bFaceMap, "final_bfaces");
 
-  return false;
+  return (bEdgeMap.size() == 0);
 }
 
 void ElemRemCollapse::cancel()
