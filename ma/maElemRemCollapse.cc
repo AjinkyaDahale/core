@@ -41,15 +41,23 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
 }
 
 // TODO: Might as well use apf::getFaceFaceAngleInTet()
-static double getCosDihedral(Mesh* m, Entity* edge,
+static double getCosDihedral(Adapt* a, Entity* edge,
                              Entity* face1, Entity* tet1,
-                             Entity* face2, Entity* tet2,
-                             const apf::Matrix3x3& Q = apf::Matrix3x3(1.,0.,0.,0.,1.,0.,0.,0.,1.))
+                             Entity* face2, Entity* tet2)
 {
+  Mesh* m = a->mesh;
+
   PCU_ALWAYS_ASSERT(m->getType(face1) == apf::Mesh::TRIANGLE);
   PCU_ALWAYS_ASSERT(m->getType(face2) == apf::Mesh::TRIANGLE);
   PCU_ALWAYS_ASSERT(m->getType(tet1) == apf::Mesh::TET);
   PCU_ALWAYS_ASSERT(m->getType(tet2) == apf::Mesh::TET);
+
+  Matrix Q;
+  apf::MeshElement* me = apf::createMeshElement(m, edge);
+  Vector center(0.0, 0.0, 0.0);
+  a->sizeField->getTransform(me,center,Q);
+  apf::destroyMeshElement(me);
+
   apf::Vector3 norm1 = computeFaceNormalAtEdgeInTet(m, tet1, face1, edge, Q);
   apf::Vector3 norm2 = computeFaceNormalAtEdgeInTet(m, tet2, face2, edge, Q);
   // Inverting one of the normals to get dihedral angle
@@ -220,7 +228,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       if (dryRun) continue;
       Entity* face1 = bEdgeMap[edges[k]].face1;
       bEdgeMap[edges[k]].face2 = face;
-      bEdgeMap[edges[k]].cda = getCosDihedral(m, edges[k],
+      bEdgeMap[edges[k]].cda = getCosDihedral(adapter, edges[k],
                                               face, bFaceMap[face].first,
                                               face1, bFaceMap[face1].first);
       // The `!=` acts as XOR. We invert if exactly one of the reference elements is negative
