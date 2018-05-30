@@ -2,6 +2,7 @@
 #define MA_ELEM_REM_COLLAPSE
 
 #include "maAdapt.h"
+#include "maCollapse.h"
 #include <pcu_util.h>
 
 #include <queue>
@@ -29,10 +30,10 @@ typedef std::map<Entity*, BEdge> BEdgeMap;
 // The values correspond to <reference element, is ref elem positive>
 typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
 
-class ElemRemCollapse
+ class ElemRemCollapse : public Collapse
 {
   public:
-    ElemRemCollapse(Adapt* a);
+    virtual void Init(Adapt* a);
 
     bool setCavity(apf::DynamicArray<Entity*> elems);
     bool addElement(Entity* e, bool isOld = false);
@@ -46,19 +47,19 @@ class ElemRemCollapse
     /** Remove the highest dimension entity */
     bool removeElement(Entity* e);
 
-    bool makeNewElements();
-    void cancel();
+    bool makeNewElements(double qualityToBeat);
+    virtual void cancel();
     void transfer();
-    void destroyOldElements();
-    void destroyNewElements();
-
-    void unmark();
+    virtual void destroyOldElements();
+    virtual void destroyNewElements();
+    virtual bool tryThisDirectionNoCancel(double qualityToBeat);
+    void unmark(bool cavOnly = false);
 
   private:
     bool markEdges(Mesh* m, Entity* face, bool dryRun = false);
     void unmarkEdges(Mesh* m, Entity* face);
 
-    Adapt* adapter;
+    /* Adapt* adapt; */
     apf::ModelEntity* modelEnt;
     
     EntitySet oldEnts;
