@@ -11,6 +11,7 @@
 #include "maCoarsen.h"
 #include "maAdapt.h"
 #include "maCollapse.h"
+#include "maElemRemCollapse.h"
 #include "maMatchedCollapse.h"
 #include "maOperator.h"
 #include <pcu_util.h>
@@ -158,6 +159,62 @@ int collapseAllEdges(Adapt* a, int modelDimension)
   return collapser.successCount;
 }
 
+class ElemRemEdgeCollapser : public Operator
+{
+  public:
+    ElemRemEdgeCollapser(Adapt* a, int md):
+      modelDimension(md)
+    {
+      collapse.Init(a);
+      successCount = 0;
+      if(a->input->shouldForceAdaptation)
+        qualityToBeat = getAdapt()->input->validQuality;
+      else
+        qualityToBeat = getAdapt()->input->goodQuality;
+    }
+    virtual int getTargetDimension() {return 1;}
+    virtual bool shouldApply(Entity* e)
+    {
+      Adapt* a = getAdapt();
+      if ( ! getFlag(a,e,COLLAPSE))
+        return false;
+      Mesh* m = a->mesh;
+      int md = m->getModelType(m->toModel(e));
+      if (md!=modelDimension)
+        return false;
+      bool ok = collapse.setEdge(e);
+      PCU_ALWAYS_ASSERT(ok);
+      return true;
+    }
+    virtual bool requestLocality(apf::CavityOp* o)
+    {
+      return collapse.requestLocality(o);
+    }
+    virtual void apply()
+    {
+      if ( ! collapse.checkTopo())
+        return;
+      if ( ! collapse.tryBothDirections(qualityToBeat))
+        return;
+      collapse.destroyOldElements();
+      collapse.unmark(true);
+      ++successCount;
+    }
+    Adapt* getAdapt() {return collapse.adapt;}
+    int successCount;
+  private:
+    ElemRemCollapse collapse;
+    int modelDimension;
+    double qualityToBeat;
+};
+
+int collapseEdgesByElemRem(Adapt* a, int modelDimension)
+{
+  ElemRemEdgeCollapser collapser(a,modelDimension);
+  applyOperator(a,&collapser);
+  return collapser.successCount;
+}
+
 class MatchedEdgeCollapser : public Operator
 {
   public:
@@ -250,6 +307,33 @@ bool coarsen(Adapt* a)
   successCount = PCU_Add_Long(successCount);
   double t1 = PCU_Time();
   print("coarsened %li edges in %f seconds",successCount,t1-t0);
+  return true;
+}
+
+bool coarsenByElemRem(Adapt* a)
+{
+  if (!a->input->shouldCoarsen)
+    return false;
+  double t0 = PCU_Time();
+  long count = markEdgesToCollapse(a);
+  if ( ! count)
+    return false;
+  Mesh* m = a->mesh;
+  int maxDimension = m->getDimension();
+  PCU_ALWAYS_ASSERT(checkFlagConsistency(a,1,COLLAPSE));
+  long successCount = 0;
+  for (int modelDimension=1; modelDimension <= maxDimension; ++modelDimension)
+  {
+    checkAllEdgeCollapses(a,modelDimension);
+    findIndependentSet(a);
+    if (m->hasMatching())
+      continue;
+    else
+      successCount += collapseEdgesByElemRem(a, modelDimension);
+  }
+  successCount = PCU_Add_Long(successCount);
+  double t1 = PCU_Time();
+  print("coarsened %li edges by element removal in %f seconds",successCount,t1-t0);
   return true;
 }
 

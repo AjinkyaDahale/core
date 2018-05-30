@@ -15,6 +15,7 @@ namespace ma {
 class Adapt;
 
 bool coarsen(Adapt* a);
+bool coarsenByElemRem(Adapt* a);
 bool coarsenLayer(Adapt* a);
 
 void checkAllEdgeCollapses(Adapt* a, int modelDimension);
