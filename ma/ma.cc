@@ -64,6 +64,7 @@ void adaptVerbose(Input* in, bool verbose)
     coarsen(a);
     if (verbose && in->shouldCoarsen)
       ma_dbg::dumpMeshWithQualities(a,i,"after_coarsen");
+    coarsenByElemRem(a);
     coarsenLayer(a);
     midBalance(a);
     refine(a);

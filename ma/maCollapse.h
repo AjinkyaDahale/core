@@ -23,22 +23,22 @@ class Adapt;
 class Collapse
 {
   public:
-    void Init(Adapt* a);
+    virtual void Init(Adapt* a);
     bool requestLocality(apf::CavityOp* o);
-    void destroyOldElements();
-    void destroyNewElements();
+    virtual void destroyOldElements();
+    virtual void destroyNewElements();
     virtual bool setEdge(Entity* e);
     bool checkClass();
     bool checkTopo();
-    void unmark();
+    virtual void unmark();
     void setVerts();
     virtual void computeElementSets();
     void rebuildElements();
     void fitElements();
     bool isGood2DMesh();
-    void cancel();
+    virtual void cancel();
     bool tryThisDirection(double qualityToBeat);
-    bool tryThisDirectionNoCancel(double qualityToBeat);
+    virtual bool tryThisDirectionNoCancel(double qualityToBeat);
     bool tryBothDirections(double qualityToBeat);
     void getOldElements(EntityArray& oldElements);
     double getOldQuality();
