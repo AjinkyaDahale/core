@@ -8,6 +8,8 @@
 namespace ma
 {
 
+// Using rots[i][j] will result in the the v[i] to be v'[0] after rotation
+// and v[j] to be v'[4], where v comes from getDownward(tet, 0, v).
 static int rots[4][4] = {{-1,  1,  2,  0},
                          { 4, -1,  3,  5},
                          { 7,  8, -1,  6},
@@ -65,33 +67,33 @@ static double getCosDihedral(Adapt* a, Entity* edge,
   return norm1 * norm2;
 }
 
-static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
-{
-  EntityArray faces;
-  faces.setSize(bFaceMap.size());
-  size_t i = 0;
-  for (BFaceMap::const_iterator it = bFaceMap.begin();
-       it != bFaceMap.end(); ++it) {
-    faces[i] = it->first;
-    ++i;
-  }
-  ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
-}
+// static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
+// {
+//   EntityArray faces;
+//   faces.setSize(bFaceMap.size());
+//   size_t i = 0;
+//   for (BFaceMap::const_iterator it = bFaceMap.begin();
+//        it != bFaceMap.end(); ++it) {
+//     faces[i] = it->first;
+//     ++i;
+//   }
+//   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
+// }
 
-static void showNewEnts(Adapt* a, const EntitySet& newEnts, const char* name)
-{
-  EntityArray tets;
-  tets.setSize(newEnts.size());
-  size_t i = 0;
-  APF_ITERATE(EntitySet,newEnts,it) {
-    if (getFlag(a, *it, CAV_NEW)) {
-      tets[i] = *it;
-      ++i;
-    }
-  }
-  tets.setSize(i);
-  ma_dbg::createCavityMesh(a, tets, name, apf::Mesh::TET);
-}
+// static void showNewEnts(Adapt* a, const EntitySet& newEnts, const char* name)
+// {
+//   EntityArray tets;
+//   tets.setSize(newEnts.size());
+//   size_t i = 0;
+//   APF_ITERATE(EntitySet,newEnts,it) {
+//     if (getFlag(a, *it, CAV_NEW)) {
+//       tets[i] = *it;
+//       ++i;
+//     }
+//   }
+//   tets.setSize(i);
+//   ma_dbg::createCavityMesh(a, tets, name, apf::Mesh::TET);
+// }
 
 static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
                            bool* elemMade, bool* elemInverted=NULL)
@@ -195,9 +197,9 @@ static bool newTetClear(Adapt* a, Entity* tet, BEdgeMap bEdgeMap)
   return true;
 }
 
-ElemRemCollapse::ElemRemCollapse(Adapt* a):
-adapter(a)
+void ElemRemCollapse::Init(Adapt* a)
 {
+  Collapse::Init(a);
 }
 
 bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
@@ -208,7 +210,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
   bool areNewAnglesGood = true;
 
   for (int k = 0; k < 3; k++) {
-    if(!getFlag(adapter, edges[k], MARKED)) {
+    if(!getFlag(adapt, edges[k], MARKED)) {
       PCU_ALWAYS_ASSERT(bEdgeMap.count(edges[k]) == 0);
       // Unmarked edges can always be marked
       if (dryRun) continue;
@@ -216,7 +218,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       be1.edge = edges[k];
       be1.face1 = face;
       bEdgeMap[edges[k]] = be1;
-      setFlag(adapter, edges[k], MARKED);
+      setFlag(adapt, edges[k], MARKED);
       // edgesInQueue.push_back(edges[k]);
     } else {
       PCU_DEBUG_ASSERT(bEdgeMap.count(edges[k]) > 0);
@@ -228,7 +230,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       if (dryRun) continue;
       Entity* face1 = bEdgeMap[edges[k]].face1;
       bEdgeMap[edges[k]].face2 = face;
-      bEdgeMap[edges[k]].cda = getCosDihedral(adapter, edges[k],
+      bEdgeMap[edges[k]].cda = getCosDihedral(adapt, edges[k],
                                               face, bFaceMap[face].first,
                                               face1, bFaceMap[face1].first);
       // The `!=` acts as XOR. We invert if exactly one of the reference elements is negative
@@ -241,13 +243,13 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       Entity* tryEnt = removeEdge(edges[k], &tryEntMade);
       double tryEntQual = -1;
       if (tryEnt)
-        tryEntQual = adapter->shape->getQuality(tryEnt);
-      if (tryEntQual < adapter->input->validQuality) {
+        tryEntQual = adapt->shape->getQuality(tryEnt);
+      if (tryEntQual < adapt->input->validQuality) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
-      } else if (tryEntQual < adapter->input->goodQuality) {
+      } else if (tryEntQual < adapt->input->goodQuality) {
         areNewAnglesGood = false;
       }
-      if (tryEnt && tryEntMade) destroyElement(adapter, tryEnt);
+      if (tryEnt && tryEntMade) destroyElement(adapt, tryEnt);
     }
   }
 
@@ -262,7 +264,7 @@ void ElemRemCollapse::unmarkEdges(Mesh* m, Entity* face)
   Entity* edges[3];
   m->getDownward(face, 1, edges);
   for (int k = 0; k < 3; k++) {
-    PCU_ALWAYS_ASSERT(getFlag(adapter, edges[k], MARKED));
+    PCU_ALWAYS_ASSERT(getFlag(adapt, edges[k], MARKED));
     PCU_ALWAYS_ASSERT(bEdgeMap.count(edges[k]));
     if (bEdgeMap[edges[k]].face2){
       // Ensuring that face1 survives
@@ -273,7 +275,7 @@ void ElemRemCollapse::unmarkEdges(Mesh* m, Entity* face)
       bEdgeMap[edges[k]].face2 = NULL;
     } else {
       PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1 == face);
-      clearFlag(adapter, edges[k], MARKED);
+      clearFlag(adapt, edges[k], MARKED);
       bEdgeMap.erase(edges[k]);
     }
   }
@@ -283,11 +285,16 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
 {
   int numElems = elems.getSize();
   PCU_ALWAYS_ASSERT(numElems);
-  Mesh* m = adapter->mesh;
+  Mesh* m = adapt->mesh;
   int d = m->getDimension();
   // int bcount = 0;
   // Entity* b;
   apf::Downward bs;
+
+  // Expected that anything in these to be destroyed will have
+  // been destroyed by the time we're here
+  newEnts.clear();
+  oldEnts.clear();
 
   modelEnt = m->toModel(elems[0]);
 
@@ -298,12 +305,12 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
                               "Desired cavity contains entities of different dimension than that of mesh.\n");
     // We do not want to cross model region boundaries
     if (m->toModel(elems[i]) != modelEnt) continue;
-    setFlag(adapter, elems[i], CAV_OLD);
+    setFlag(adapt, elems[i], CAV_OLD);
     int numBs = m->getDownward(elems[i], d-1, bs);
     // TODO: iter through bs, mark cav boundary entities and set bcount
     for (int j = 0; j < numBs; ++j) {
-      setFlags(adapter, bs[j],
-               getFlags(adapter, bs[j]) ^ MARKED);
+      setFlags(adapt, bs[j],
+               getFlags(adapt, bs[j]) ^ MARKED);
     }
   }
 
@@ -311,8 +318,8 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   for (int i = 0; i < numElems; ++i) {
     int numBs = m->getDownward(elems[i], d-1, bs);
     for (int j = 0; j < numBs; ++j) {
-      if (getFlag(adapter, bs[j], MARKED)) {
-        // clearFlag(adapter, bs[j], MARKED);
+      if (getFlag(adapt, bs[j], MARKED)) {
+        // clearFlag(adapt, bs[j], MARKED);
         PCU_ALWAYS_ASSERT(bFaceMap.count(bs[j]) == 0);
         bFaceMap[bs[j]] = std::make_pair(elems[i], true);
 
@@ -321,18 +328,18 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
     }
   }
 
-  ma_dbg::createCavityMesh(adapter, elems, "the_cavity");
-  showBFaces(adapter, bFaceMap, "first_bfaces");
+  // ma_dbg::createCavityMesh(adapt, elems, "the_cavity");
+  // showBFaces(adapt, bFaceMap, "first_bfaces");
 
   return true;
 }
 
 Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
 {
-  Mesh* m = adapter->mesh;
+  Mesh* m = adapt->mesh;
 
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::EDGE);
-  PCU_ALWAYS_ASSERT(getFlag(adapter, e, MARKED));
+  PCU_ALWAYS_ASSERT(getFlag(adapt, e, MARKED));
 
   BEdge& bedge = bEdgeMap[e];
   Entity *face1, *opVert;
@@ -346,37 +353,37 @@ Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
 
-  return buildOrFind(adapter, modelEnt, apf::Mesh::TET, vs, elemMade, NULL);
+  return buildOrFind(adapt, modelEnt, apf::Mesh::TET, vs, elemMade, NULL);
 }
 
 Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
 {
-  Mesh* m = adapter->mesh;
+  Mesh* m = adapt->mesh;
 
   PCU_ALWAYS_ASSERT(m->getType(face) == apf::Mesh::TRIANGLE);
-  PCU_ALWAYS_ASSERT(getFlag(adapter, face, MARKED));
+  PCU_ALWAYS_ASSERT(getFlag(adapt, face, MARKED));
 
   Entity* edges[3];
   m->getDownward(face, 1, edges);
 
   bool resultMade = false;
   Entity* result = NULL;
-  double qualityToBeat = adapter->input->validQuality;
+  double qualityToBeat = adapt->input->validQuality;
 
   for (int i = 0; i < 3; ++i) {
     bool newTetMade;
     Entity* newTet = removeEdge(edges[i], &newTetMade);
     if (!newTet) continue;
-    double newQual = adapter->shape->getQuality(newTet);
+    double newQual = adapt->shape->getQuality(newTet);
     if (newQual > qualityToBeat){
-      if (result && resultMade) destroyElement(adapter, result);
+      if (result && resultMade) destroyElement(adapt, result);
       result = newTet;
       resultMade = newTetMade;
       qualityToBeat = newQual;
     }
     else
       if (newTet && (result != newTet) && newTetMade)
-        destroyElement(adapter, newTet);
+        destroyElement(adapt, newTet);
   }
 
   if (elemMade) *elemMade = resultMade;
@@ -386,32 +393,32 @@ Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
 
 bool ElemRemCollapse::removeElement(Entity* e)
 {
-  Mesh* m = adapter->mesh;
+  Mesh* m = adapt->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
-  PCU_ALWAYS_ASSERT(!getFlag(adapter, e, CAV_NEW));
+  PCU_ALWAYS_ASSERT(!getFlag(adapt, e, CAV_NEW));
   // TODO: mark this entity
   Entity* fs[4];
   m->getDownward(e, 2, fs);
 
   newEnts.insert(e);
 
-  if (!newTetClear(adapter, e, bEdgeMap)) {
+  if (!newTetClear(adapt, e, bEdgeMap)) {
     oldEnts.insert(e);
     return false;
   }
 
   for (int j = 0; j < 4; ++j) {
     // switch marks on faces
-    setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+    setFlags(adapt, fs[j], getFlags(adapt, fs[j]) ^ MARKED);
 
-    if (!getFlag(adapter, fs[j], MARKED)){
+    if (!getFlag(adapt, fs[j], MARKED)){
       unmarkEdges(m, fs[j]);
     }
   }
 
   bool canMark = true;
   for (int j = 0; j < 4; ++j) {
-    if (getFlag(adapter, fs[j], MARKED)){
+    if (getFlag(adapt, fs[j], MARKED)){
       canMark = canMark && markEdges(m, fs[j], true);
     }
   }
@@ -419,13 +426,13 @@ bool ElemRemCollapse::removeElement(Entity* e)
   if (!canMark) {
     for (int j = 0; j < 4; ++j) {
       // Switch-back marks on faces
-      setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+      setFlags(adapt, fs[j], getFlags(adapt, fs[j]) ^ MARKED);
     }
   }
 
   bool areNewAnglesGood = true;
   for (int j = 0; j < 4; ++j) {
-    if (getFlag(adapter, fs[j], MARKED)){
+    if (getFlag(adapt, fs[j], MARKED)){
       if (canMark)
         bFaceMap[fs[j]] = std::make_pair(e, !canMark);
       areNewAnglesGood = markEdges(m, fs[j]) && areNewAnglesGood;
@@ -441,11 +448,11 @@ bool ElemRemCollapse::removeElement(Entity* e)
     //     return false;
     //   // If failed: what's done is done, go forward
     // }
-    ma_dbg::createCavityMesh(adapter, newEnts, "cavity_now");
-    setFlag(adapter, e, CAV_NEW);
+    // ma_dbg::createCavityMesh(adapt, newEnts, "cavity_now");
+    setFlag(adapt, e, CAV_NEW);
   } else {
     oldEnts.insert(e);
-    // destroyElement(adapter, e);
+    // destroyElement(adapt, e);
   }
   
   return canMark;
@@ -453,7 +460,7 @@ bool ElemRemCollapse::removeElement(Entity* e)
 
 bool ElemRemCollapse::addElement(Entity* e, bool isOld)
 {
-  Mesh* m = adapter->mesh;
+  Mesh* m = adapt->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
 
   Entity* fs[4];
@@ -461,16 +468,16 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
 
   for (int j = 0; j < 4; ++j) {
     // switch marks on faces
-    setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+    setFlags(adapt, fs[j], getFlags(adapt, fs[j]) ^ MARKED);
 
-    if (!getFlag(adapter, fs[j], MARKED)){
+    if (!getFlag(adapt, fs[j], MARKED)){
       unmarkEdges(m, fs[j]);
     }
   }
 
   bool canMark = true;
   for (int j = 0; j < 4; ++j) {
-    if (getFlag(adapter, fs[j], MARKED)){
+    if (getFlag(adapt, fs[j], MARKED)){
       canMark = canMark && markEdges(m, fs[j], true);
     }
   }
@@ -478,12 +485,12 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
   if (!canMark) {
     for (int j = 0; j < 4; ++j) {
       // Switch-back marks on faces
-      setFlags(adapter, fs[j], getFlags(adapter, fs[j]) ^ MARKED);
+      setFlags(adapt, fs[j], getFlags(adapt, fs[j]) ^ MARKED);
     }
   }
 
   for (int j = 0; j < 4; ++j) {
-    if (getFlag(adapter, fs[j], MARKED)) {
+    if (getFlag(adapt, fs[j], MARKED)) {
       if (canMark)
         bFaceMap[fs[j]] = std::make_pair(e, canMark);
       markEdges(m, fs[j]);
@@ -493,9 +500,9 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
   }
   
   oldEnts.insert(e);
-  if (isOld) setFlag(adapter, e, CAV_OLD);
+  if (isOld) setFlag(adapt, e, CAV_OLD);
   if (canMark) {
-    clearFlag(adapter, e, CAV_NEW);
+    clearFlag(adapt, e, CAV_NEW);
   } else {
     newEnts.insert(e);
   }
@@ -503,14 +510,14 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
   return canMark;
 }
 
-bool ElemRemCollapse::makeNewElements()
+bool ElemRemCollapse::makeNewElements(double qualityToBeat)
 {
   size_t count = 0;
   compareEdgeByCosAngle comp(bEdgeMap);
   
-  std::stringstream ss;
-  ss << "bfaces_" << count;
-  showBFaces(adapter, bFaceMap, ss.str().c_str());
+  // std::stringstream ss;
+  // ss << "bfaces_" << count;
+  // showBFaces(adapt, bFaceMap, ss.str().c_str());
   // at worst during marking, all the tet's edges will be added.
   edgesInQueue.reserve(edgesInQueue.size()+6);
   
@@ -530,7 +537,7 @@ bool ElemRemCollapse::makeNewElements()
     first_it = edgesInQueue.begin();
     last_it = edgesInQueue.end();
 
-    if (!getFlag(adapter, edge, MARKED)) continue;
+    if (!getFlag(adapt, edge, MARKED)) continue;
 
     bool elementRemoved = false;
     Entity* face1 = bEdgeMap[edge].face1;
@@ -539,22 +546,22 @@ bool ElemRemCollapse::makeNewElements()
     Entity* newTet = removeFace(face1, &newTetMade);
 
     if (newTet &&
-        (adapter->shape->getQuality(newTet) >
-         adapter->input->goodQuality)) {
+        (adapt->shape->getQuality(newTet) >
+         qualityToBeat)) {
       elementRemoved = elementRemoved || removeElement(newTet);
     } else {
-      if (newTet && newTetMade) destroyElement(adapter, newTet);
+      if (newTet && newTetMade) destroyElement(adapt, newTet);
     }
 
     if (!elementRemoved) {
       newTet = removeFace(face2, &newTetMade);
 
       if (newTet &&
-          (adapter->shape->getQuality(newTet) >
-           adapter->input->goodQuality)) {
+          (adapt->shape->getQuality(newTet) >
+           qualityToBeat)) {
         elementRemoved = elementRemoved || removeElement(newTet);
       } else {
-        if (newTet && newTetMade) destroyElement(adapter, newTet);
+        if (newTet && newTetMade) destroyElement(adapt, newTet);
       }
     }
 
@@ -567,16 +574,38 @@ bool ElemRemCollapse::makeNewElements()
       last_it = edgesInQueue.end();
       std::make_heap(first_it, last_it, comp);
       count++;
-      std::stringstream ss;
-      ss << "bfaces_" << count;
-      showBFaces(adapter, bFaceMap, ss.str().c_str());
+      // std::stringstream ss;
+      // ss << "bfaces_" << count;
+      // showBFaces(adapt, bFaceMap, ss.str().c_str());
     }
   }
 
-  showNewEnts(adapter, newEnts, "the_new_cavity");
-  showBFaces(adapter, bFaceMap, "final_bfaces");
+  // showNewEnts(adapt, newEnts, "the_new_cavity");
+  // showBFaces(adapt, bFaceMap, "final_bfaces");
 
   return (bEdgeMap.size() == 0);
+}
+
+bool ElemRemCollapse::tryThisDirectionNoCancel(double qualityToBeat)
+{
+  Mesh* m = adapt->mesh;
+  PCU_ALWAYS_ASSERT( ! m->isShared(vertToCollapse));
+  // Edges on closure of region have some peculiarities not addressed yet
+  if ( m->getDimension() > m->getModelType(m->toModel(edge)))
+    return false;
+  apf::Adjacent oldCav;
+  m->getAdjacent(vertToCollapse, m->getDimension(), oldCav);
+  setCavity(oldCav);
+  bool newCavOK = makeNewElements(qualityToBeat);
+  if (!newCavOK)
+    return false;
+  // since they are okay in a linear sense, now fit and do a quality assessment
+  fitElements();
+  // The following check should already be handled in makeNewElements
+  // if (hasWorseQuality(adapt,newElements,qualityToBeat))
+  //   return false;
+
+  return true;
 }
 
 void ElemRemCollapse::cancel()
@@ -595,39 +624,43 @@ void ElemRemCollapse::transfer()
   // keeping as placeholder for whenever element insertion is used
 }
 
-void ElemRemCollapse::unmark()
+void ElemRemCollapse::unmark(bool cavOnly)
 {
+  if (!cavOnly)
+    Collapse::unmark();
+  
   APF_ITERATE(BEdgeMap,bEdgeMap,it) {
-    clearFlag(adapter, it->first, MARKED);
+    clearFlag(adapt, it->first, MARKED);
   }
 
   APF_ITERATE(BFaceMap,bFaceMap,it) {
-    clearFlag(adapter, it->first, MARKED);
+    clearFlag(adapt, it->first, MARKED);
   }
 
   APF_ITERATE(EntitySet,oldEnts,it) {
-    clearFlag(adapter, *it, CAV_OLD);
-    clearFlag(adapter, *it, CAV_NEW);
+    clearFlag(adapt, *it, CAV_OLD);
+    clearFlag(adapt, *it, CAV_NEW);
   }
 
   APF_ITERATE(EntitySet,newEnts,it) {
-    clearFlag(adapter, *it, CAV_OLD);
-    clearFlag(adapter, *it, CAV_NEW);
+    clearFlag(adapt, *it, CAV_OLD);
+    clearFlag(adapt, *it, CAV_NEW);
   }
 }
 
 void ElemRemCollapse::destroyOldElements()
 {
   APF_ITERATE(ma::EntitySet,oldEnts,it)
-    if (!getFlag(adapter, *it, CAV_NEW))
-      destroyElement(adapter, *it);
+    if (!getFlag(adapt, *it, CAV_NEW))
+      destroyElement(adapt, *it);
 }
 
 void ElemRemCollapse::destroyNewElements()
 {
   APF_ITERATE(ma::EntitySet,newEnts,it)
-    if (!getFlag(adapter, *it, CAV_OLD))
-      destroyElement(adapter, *it);
+    if (!getFlag(adapt, *it, CAV_OLD))
+      destroyElement(adapt, *it);
+  newEnts.clear();
 }
 
 }
