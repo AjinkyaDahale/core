@@ -73,13 +73,15 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
     compareEdgeByCosAngle(BEdgeMap& bEdgeMap) : _bEdgeMap(&bEdgeMap) {}
       bool operator()(Entity* a, Entity* b)
       {
-        // recall that this returns whether a compares _less_ that b, and
-        // and std::make_heap returns a _max_ heap
-        // if a is not on cavity boundary, pop it out first
+        // Recall that this returns whether a compares _less_ that b, and
+        // and std::make_heap returns a _max_ heap.
+
+        // If a is not on cavity boundary, pop it out first
         if(_bEdgeMap->count(a) == 0) return false;
         // likewise for b
         if(_bEdgeMap->count(b) == 0) return true;
-        return (*_bEdgeMap)[a].cda > (*_bEdgeMap)[b].cda;
+
+        return (*_bEdgeMap)[a].cda < (*_bEdgeMap)[b].cda;
       }
     private:
       BEdgeMap* const _bEdgeMap;
