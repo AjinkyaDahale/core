@@ -540,10 +540,10 @@ bool ElemRemCollapse::makeNewElements(double qualityToBeat)
     if (!getFlag(adapt, edge, MARKED)) continue;
 
     bool elementRemoved = false;
-    Entity* face1 = bEdgeMap[edge].face1;
-    Entity* face2 = bEdgeMap[edge].face2;
+    // Entity* face1 = bEdgeMap[edge].face1;
+    // Entity* face2 = bEdgeMap[edge].face2;
     bool newTetMade;
-    Entity* newTet = removeFace(face1, &newTetMade);
+    Entity* newTet = removeEdge(edge, &newTetMade);
 
     if (newTet &&
         (adapt->shape->getQuality(newTet) >
@@ -553,17 +553,17 @@ bool ElemRemCollapse::makeNewElements(double qualityToBeat)
       if (newTet && newTetMade) destroyElement(adapt, newTet);
     }
 
-    if (!elementRemoved) {
-      newTet = removeFace(face2, &newTetMade);
+    // if (!elementRemoved) {
+    //   newTet = removeFace(face2, &newTetMade);
 
-      if (newTet &&
-          (adapt->shape->getQuality(newTet) >
-           qualityToBeat)) {
-        elementRemoved = elementRemoved || removeElement(newTet);
-      } else {
-        if (newTet && newTetMade) destroyElement(adapt, newTet);
-      }
-    }
+    //   if (newTet &&
+    //       (adapt->shape->getQuality(newTet) >
+    //        qualityToBeat)) {
+    //     elementRemoved = elementRemoved || removeElement(newTet);
+    //   } else {
+    //     if (newTet && newTetMade) destroyElement(adapt, newTet);
+    //   }
+    // }
 
     if (elementRemoved) {
       edgesInQueue.clear();
