@@ -67,18 +67,18 @@ static double getCosDihedral(Adapt* a, Entity* edge,
   return norm1 * norm2;
 }
 
-// static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
-// {
-//   EntityArray faces;
-//   faces.setSize(bFaceMap.size());
-//   size_t i = 0;
-//   for (BFaceMap::const_iterator it = bFaceMap.begin();
-//        it != bFaceMap.end(); ++it) {
-//     faces[i] = it->first;
-//     ++i;
-//   }
-//   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
-// }
+static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
+{
+  EntityArray faces;
+  faces.setSize(bFaceMap.size());
+  size_t i = 0;
+  for (BFaceMap::const_iterator it = bFaceMap.begin();
+       it != bFaceMap.end(); ++it) {
+    faces[i] = it->first;
+    ++i;
+  }
+  ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
+}
 
 // static void showNewEnts(Adapt* a, const EntitySet& newEnts, const char* name)
 // {
@@ -244,9 +244,10 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       double tryEntQual = -1;
       if (tryEnt)
         tryEntQual = adapt->shape->getQuality(tryEnt);
-      if (tryEntQual < adapt->input->validQuality) {
+      if (tryEntQual < -adapt->input->validQuality) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
-      } else if (tryEntQual < adapt->input->goodQuality) {
+      } else if (tryEntQual < this->qualToBeat &&
+                 bEdgeMap[edges[k]].cda > 0) {
         areNewAnglesGood = false;
       }
       if (tryEnt && tryEntMade) destroyElement(adapt, tryEnt);
@@ -294,6 +295,7 @@ bool ElemRemCollapse::setCavity(apf::DynamicArray<Entity*> elems)
   // Expected that anything in these to be destroyed will have
   // been destroyed by the time we're here
   newEnts.clear();
+  newEntsArray.setSize(0);
   oldEnts.clear();
 
   modelEnt = m->toModel(elems[0]);
@@ -395,7 +397,13 @@ bool ElemRemCollapse::removeElement(Entity* e)
 {
   Mesh* m = adapt->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
-  PCU_ALWAYS_ASSERT(!getFlag(adapt, e, CAV_NEW));
+  if (getFlag(adapt, e, CAV_NEW)) {
+    ma_dbg::createCavityMesh(adapt, newEntsArray, "new_ents_array", apf::Mesh::TET);
+    showBFaces(adapt, bFaceMap, "bfaces");
+    EntityArray offender;
+    offender.append(e);
+    ma_dbg::createCavityMesh(adapt, offender, "offending_tet", apf::Mesh::TET);
+    apf::fail("Some tet is being removed twice!\n");}
   // TODO: mark this entity
   Entity* fs[4];
   m->getDownward(e, 2, fs);
@@ -442,14 +450,15 @@ bool ElemRemCollapse::removeElement(Entity* e)
   }
 
   if (canMark) {
-    // if (!areNewAnglesGood) {
-    //   // There are some bad angles introduced, try to undo
-    //   if (addElement(e))
-    //     return false;
-    //   // If failed: what's done is done, go forward
-    // }
+    if (!areNewAnglesGood) {
+      // There are some bad angles introduced, try to undo
+      if (addElement(e))
+        return false;
+      // If failed: what's done is done, go forward
+    }
     // ma_dbg::createCavityMesh(adapt, newEnts, "cavity_now");
     setFlag(adapt, e, CAV_NEW);
+    newEntsArray.append(e);
   } else {
     oldEnts.insert(e);
     // destroyElement(adapt, e);
@@ -512,6 +521,7 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
 
 bool ElemRemCollapse::makeNewElements(double qualityToBeat)
 {
+  this->qualToBeat = qualityToBeat;
   size_t count = 0;
   compareEdgeByCosAngle comp(bEdgeMap);
   
