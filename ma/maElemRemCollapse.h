@@ -59,11 +59,13 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
     bool markEdges(Mesh* m, Entity* face, bool dryRun = false);
     void unmarkEdges(Mesh* m, Entity* face);
 
+  double qualToBeat;
     /* Adapt* adapt; */
     apf::ModelEntity* modelEnt;
     
     EntitySet oldEnts;
     EntitySet newEnts;
+    EntityArray newEntsArray;
     BEdgeMap bEdgeMap;
     BFaceMap bFaceMap;
     std::vector<Entity*> edgesInQueue;
