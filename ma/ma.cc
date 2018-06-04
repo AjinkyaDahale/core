@@ -61,10 +61,10 @@ void adaptVerbose(Input* in, bool verbose)
   for (int i = 0; i < in->maximumIterations; ++i)
   {
     print("iteration %d",i);
-    coarsen(a);
+    // coarsen(a);
+    coarsenByElemRem(a);
     if (verbose && in->shouldCoarsen)
       ma_dbg::dumpMeshWithQualities(a,i,"after_coarsen");
-    coarsenByElemRem(a);
     coarsenLayer(a);
     midBalance(a);
     refine(a);
