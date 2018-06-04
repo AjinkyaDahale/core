@@ -166,6 +166,7 @@ class ElemRemEdgeCollapser : public Operator
       modelDimension(md)
     {
       collapse.Init(a);
+      erc.Init(a);
       successCount = 0;
       if(a->input->shouldForceAdaptation)
         qualityToBeat = getAdapt()->input->validQuality;
@@ -183,27 +184,36 @@ class ElemRemEdgeCollapser : public Operator
       if (md!=modelDimension)
         return false;
       bool ok = collapse.setEdge(e);
+      ok = erc.setEdge(e) && ok;
       PCU_ALWAYS_ASSERT(ok);
       return true;
     }
     virtual bool requestLocality(apf::CavityOp* o)
     {
-      return collapse.requestLocality(o);
+      return erc.requestLocality(o);
     }
     virtual void apply()
     {
       if ( ! collapse.checkTopo())
         return;
-      if ( ! collapse.tryBothDirections(qualityToBeat))
+      if ( ! erc.checkTopo())
         return;
-      collapse.destroyOldElements();
-      collapse.unmark(true);
-      ++successCount;
+      if (collapse.tryBothDirections(qualityToBeat)) {
+        collapse.destroyOldElements();
+        ++successCount;
+      } else if (erc.tryBothDirections(qualityToBeat)) {
+        erc.destroyOldElements();
+        erc.unmark(true);
+        ++successCount;
+      } else {
+        return;
+      }
     }
-    Adapt* getAdapt() {return collapse.adapt;}
+    Adapt* getAdapt() {return erc.adapt;}
     int successCount;
   private:
-    ElemRemCollapse collapse;
+    Collapse collapse;
+    ElemRemCollapse erc;
     int modelDimension;
     double qualityToBeat;
 };
