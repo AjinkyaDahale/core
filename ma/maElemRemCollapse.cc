@@ -95,8 +95,62 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
 //   ma_dbg::createCavityMesh(a, tets, name, apf::Mesh::TET);
 // }
 
+static bool reclassifyWithClosure(Mesh* m, Entity* e, Model* defC = NULL)
+{
+  Model* currC = m->toModel(e);
+
+  // This might mean `e` existed already, or we already processed it
+  if (defC && m->getModelType(currC) < m->getModelType(defC))
+    return true;
+
+  // Classify self first
+  // Up to 3-D simplices
+  Entity* ents[4];
+  int nv = m->getDownward(e, 0, ents);
+
+  Model* newC= m->toModel(ents[0]);
+  int maxCT = m->getModelType(newC);
+  bool conflict = false;
+
+  for (int i = 1; i < nv; i++) {Model* cv = m->toModel(ents[i]);
+    int cvt = m->getModelType(cv);
+    if (cvt > maxCT) {
+      maxCT = cvt;
+      newC = cv;
+      conflict = false;
+    } else if (cvt == maxCT && cv != newC) {
+      conflict = true;
+    }
+  }
+
+  if (conflict) {
+    PCU_DEBUG_ASSERT(maxCT < m->getModelType(defC));
+    if (m->getModelType(defC) - maxCT > 1)
+      return false; // ambiguous classification
+    else
+      newC= defC;
+  }
+
+  int dimn = apf::Mesh::typeDimension[m->getType(e)];
+  bool closureOK = true;
+  if (dimn > 1) {
+    nv = m->getDownward(e, dimn-1, ents);
+    for (int i = 0; i < nv && closureOK; i++) {
+      closureOK = closureOK && reclassifyWithClosure(m, ents[i], newC);
+    }
+  }
+
+  if (closureOK) {
+    m->setModelEntity(e, newC);
+    return true;
+  }
+
+  return false;
+}
+
 static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
-                           bool* elemMade, bool* elemInverted=NULL)
+                           bool* elemMade, bool* elemInverted=NULL,
+                           bool reclassify = false)
 {
   Mesh* m = a->mesh;
 
@@ -108,6 +162,11 @@ static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
     if (elemMade) *elemMade = false;
   } else {
     newTet = buildElement(a, c, type, vs);
+    if (reclassify and c && !reclassifyWithClosure(m, newTet, c)) {
+      if (elemMade) *elemMade = false;
+      destroyElement(a, newTet);
+      return NULL;
+    }
     if (elemMade) *elemMade = true;
   }
 
@@ -120,6 +179,7 @@ static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
     else
       return NULL;
   }
+
   return newTet;
 }
 
@@ -171,7 +231,7 @@ static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
     if (elemsMade[i]) destroyElement(a, tets[i]);
   }
 
-  intersect = intersect && 
+  intersect = intersect &&
     (((qs[2] > qv) && (qs[3] > qv) && (qs[4] > qv)) ||
      ((qs[2] < -qv) && (qs[3] < -qv) && (qs[4] < -qv)));
 
@@ -463,7 +523,7 @@ bool ElemRemCollapse::removeElement(Entity* e)
     oldEnts.insert(e);
     // destroyElement(adapt, e);
   }
-  
+
   return canMark;
 }
 
@@ -507,7 +567,7 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
       bFaceMap.erase(fs[j]);
     }
   }
-  
+
   oldEnts.insert(e);
   if (isOld) setFlag(adapt, e, CAV_OLD);
   if (canMark) {
@@ -524,13 +584,13 @@ bool ElemRemCollapse::makeNewElements(double qualityToBeat)
   this->qualToBeat = qualityToBeat;
   size_t count = 0;
   compareEdgeByCosAngle comp(bEdgeMap);
-  
+
   // std::stringstream ss;
   // ss << "bfaces_" << count;
   // showBFaces(adapt, bFaceMap, ss.str().c_str());
   // at worst during marking, all the tet's edges will be added.
   edgesInQueue.reserve(edgesInQueue.size()+6);
-  
+
   edgesInQueue.clear();
   for (BEdgeMap::iterator it = bEdgeMap.begin(); it != bEdgeMap.end(); ++it)
     edgesInQueue.push_back(it->first);
@@ -618,10 +678,10 @@ bool ElemRemCollapse::tryThisDirectionNoCancel(double qualityToBeat)
   return true;
 }
 
-void ElemRemCollapse::cancel()
+void ElemRemCollapse::cancel(bool cavOnly)
 {
   destroyNewElements();
-  unmark();
+  unmark(cavOnly);
   bEdgeMap.clear();
   bFaceMap.clear();
   oldEnts.clear();
@@ -638,7 +698,7 @@ void ElemRemCollapse::unmark(bool cavOnly)
 {
   if (!cavOnly)
     Collapse::unmark();
-  
+
   APF_ITERATE(BEdgeMap,bEdgeMap,it) {
     clearFlag(adapt, it->first, MARKED);
   }
