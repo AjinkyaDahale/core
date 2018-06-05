@@ -35,8 +35,9 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
   public:
     virtual void Init(Adapt* a);
 
-    bool setCavity(apf::DynamicArray<Entity*> elems);
+    bool setCavity(apf::DynamicArray<Entity*>& elems);
     bool addElement(Entity* e, bool isOld = false);
+  void setIgnoredModelFaces();
 
     /** Only creates an element with the edge and adjacent
 	faces on cavity surface. May return NULL under certain circumstances.*/
@@ -48,7 +49,8 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
     bool removeElement(Entity* e);
 
     bool makeNewElements(double qualityToBeat);
-    virtual void cancel(bool cavOnly = false);
+    void cancel(bool cavOnly);
+    virtual void cancel();
     void transfer();
     virtual void destroyOldElements();
     virtual void destroyNewElements();
@@ -58,6 +60,8 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
   private:
     bool markEdges(Mesh* m, Entity* face, bool dryRun = false);
     void unmarkEdges(Mesh* m, Entity* face);
+  
+  bool newTetClear(Adapt* a, Entity* tet);
 
   double qualToBeat;
     /* Adapt* adapt; */
