@@ -48,7 +48,7 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
     bool removeElement(Entity* e);
 
     bool makeNewElements(double qualityToBeat);
-    virtual void cancel();
+    virtual void cancel(bool cavOnly = false);
     void transfer();
     virtual void destroyOldElements();
     virtual void destroyNewElements();
@@ -69,6 +69,8 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
     BEdgeMap bEdgeMap;
     BFaceMap bFaceMap;
     std::vector<Entity*> edgesInQueue;
+
+  std::set<Model*> ignoredFaceClassifn;
 
     class compareEdgeByCosAngle {
     public:
