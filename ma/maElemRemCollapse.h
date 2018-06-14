@@ -37,7 +37,8 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
 
     bool setCavity(apf::DynamicArray<Entity*>& elems);
     bool addElement(Entity* e, bool isOld = false);
-  void setIgnoredModelFaces();
+  void setIgnoredModelFaces(EntityArray& ups);
+  void addClassifnGroups(EntityArray& ups);
 
     /** Only creates an element with the edge and adjacent
 	faces on cavity surface. May return NULL under certain circumstances.*/
@@ -60,10 +61,12 @@ typedef std::map<Entity*, std::pair<Entity*, bool> > BFaceMap;
   private:
     bool markEdges(Mesh* m, Entity* face, bool dryRun = false);
     void unmarkEdges(Mesh* m, Entity* face);
-  
-  bool newTetClear(Adapt* a, Entity* tet);
 
-  double qualToBeat;
+    std::map< Model*, EntitySet> classifnGroups;
+  
+    bool newTetClear(Adapt* a, Entity* tet);
+
+    double qualToBeat;
     /* Adapt* adapt; */
     apf::ModelEntity* modelEnt;
     
