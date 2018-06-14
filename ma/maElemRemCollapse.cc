@@ -100,8 +100,16 @@ static bool reclassifyWithClosure(Mesh* m, Entity* e, Model* defC = NULL)
   Model* currC = m->toModel(e);
 
   // This might mean `e` existed already, or we already processed it
-  if (defC && m->getModelType(currC) < m->getModelType(defC))
+  if (defC && m->getModelType(currC) < m->getModelType(defC)) {
+    // apf::Up up;
+    // TODO: Ignore anything downward adjacent to a tet with CAV_OLD flag
+
+    // TODO: Ensure there are a sufficient number of upward adjacent entities
+    // classified properly (e.g. for mesh edge `e` on model face, there are 2 mesh
+    // faces on that model face up adjacent to `e`).
+
     return true;
+  }
 
   // Classify self first
   // Up to 3-D simplices
@@ -128,7 +136,7 @@ static bool reclassifyWithClosure(Mesh* m, Entity* e, Model* defC = NULL)
     if (m->getModelType(defC) - maxCT > 1)
       return false; // ambiguous classification
     else
-      newC= defC;
+      newC = defC;
   }
 
   int dimn = apf::Mesh::typeDimension[m->getType(e)];
@@ -602,19 +610,26 @@ bool ElemRemCollapse::addElement(Entity* e, bool isOld)
   return canMark;
 }
 
-void ElemRemCollapse::setIgnoredModelFaces()
+void ElemRemCollapse::setIgnoredModelFaces(EntityArray& ups)
 {
   Mesh* m = adapt->mesh;
   int dim = m->getDimension();
-  APF_ITERATE(BFaceMap,bFaceMap,it) {
-    Model* c = m->toModel(it->first);
+  APF_ITERATE(EntityArray,ups,it) {
+    Model* c = m->toModel(*it);
     if (m->getModelType(c) < dim)
       ignoredFaceClassifn.insert(c);
   }
-  APF_ITERATE(BEdgeMap,bEdgeMap,it) {
-    Model* c = m->toModel(it->first);
-    if (m->getModelType(c) < dim)
-      ignoredFaceClassifn.insert(c);
+}
+
+void ElemRemCollapse::addClassifnGroups(EntityArray& ups)
+{
+  Mesh* m = adapt->mesh;
+  APF_ITERATE(EntityArray,ups,it) {
+    Model* c = m->toModel(*it);
+    apf::Downward vs;
+    int nv = m->getDownward(*it, 0, vs);
+    for (int i = 0; i < nv; ++i)
+      classifnGroups[c].insert(vs[i]);
   }
 }
 
@@ -714,8 +729,14 @@ bool ElemRemCollapse::tryThisDirectionNoCancel(double qualityToBeat)
   apf::Adjacent oldCav;
   m->getAdjacent(vertToCollapse, m->getDimension(), oldCav);
   setCavity(oldCav);
+  addClassifnGroups(oldCav);
   if (m->getModelType(m->toModel(vertToCollapse)) < m->getDimension()) {
-    setIgnoredModelFaces();
+    for (int d = m->getDimension()-1; d > 0; --d) {
+      apf::Adjacent ups;
+      m->getAdjacent(vertToCollapse, d, ups);
+      setIgnoredModelFaces(ups);
+      addClassifnGroups(ups);
+    }
   }
   bool newCavOK = makeNewElements(qualityToBeat);
   if (!newCavOK)
