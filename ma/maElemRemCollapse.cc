@@ -95,70 +95,8 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
 //   ma_dbg::createCavityMesh(a, tets, name, apf::Mesh::TET);
 // }
 
-static bool reclassifyWithClosure(Mesh* m, Entity* e, Model* defC = NULL)
-{
-  Model* currC = m->toModel(e);
-
-  // This might mean `e` existed already, or we already processed it
-  if (defC && m->getModelType(currC) < m->getModelType(defC)) {
-    // apf::Up up;
-    // TODO: Ignore anything downward adjacent to a tet with CAV_OLD flag
-
-    // TODO: Ensure there are a sufficient number of upward adjacent entities
-    // classified properly (e.g. for mesh edge `e` on model face, there are 2 mesh
-    // faces on that model face up adjacent to `e`).
-
-    return true;
-  }
-
-  // Classify self first
-  // Up to 3-D simplices
-  Entity* ents[4];
-  int nv = m->getDownward(e, 0, ents);
-
-  Model* newC= m->toModel(ents[0]);
-  int maxCT = m->getModelType(newC);
-  bool conflict = false;
-
-  for (int i = 1; i < nv; i++) {Model* cv = m->toModel(ents[i]);
-    int cvt = m->getModelType(cv);
-    if (cvt > maxCT) {
-      maxCT = cvt;
-      newC = cv;
-      conflict = false;
-    } else if (cvt == maxCT && cv != newC) {
-      conflict = true;
-    }
-  }
-
-  if (conflict) {
-    PCU_DEBUG_ASSERT(maxCT < m->getModelType(defC));
-    if (m->getModelType(defC) - maxCT > 1)
-      return false; // ambiguous classification
-    else
-      newC = defC;
-  }
-
-  int dimn = apf::Mesh::typeDimension[m->getType(e)];
-  bool closureOK = true;
-  if (dimn > 1) {
-    nv = m->getDownward(e, dimn-1, ents);
-    for (int i = 0; i < nv && closureOK; i++) {
-      closureOK = closureOK && reclassifyWithClosure(m, ents[i], newC);
-    }
-  }
-
-  if (closureOK) {
-    m->setModelEntity(e, newC);
-    return true;
-  }
-
-  return false;
-}
-
-static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
-                           bool* elemMade, bool* elemInverted=NULL,
-                           bool reclassify = true)
+Entity* ElemRemCollapse::buildOrFind(Adapt* a, int type, Entity** vs,
+                           bool* elemMade, bool* elemInverted)
 {
   Mesh* m = a->mesh;
 
@@ -169,12 +107,8 @@ static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
   if (newTet) {
     if (elemMade) *elemMade = false;
   } else {
-    newTet = buildElement(a, c, type, vs);
-    if (reclassify and c && !reclassifyWithClosure(m, newTet, c)) {
-      if (elemMade) *elemMade = false;
-      destroyElement(a, newTet);
-      return NULL;
-    }
+    ElementBuilder2 b(m,type,classifnGroups,a->buildCallback,elemMade);
+    newTet = b.run(type,vs);
     if (elemMade) *elemMade = true;
   }
 
@@ -191,7 +125,7 @@ static Entity* buildOrFind(Adapt* a, Model* c, int type, Entity** vs,
   return newTet;
 }
 
-static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
+bool ElemRemCollapse::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
 {
   Mesh* m = a->mesh;
   Entity* fvi[3];
@@ -208,14 +142,15 @@ static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   Entity* vs[4];
 
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
-  tets[0] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[0], &elemsInverted[0]);
+  tets[0] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[0], &elemsInverted[0]);
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
-  tets[1] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[1], &elemsInverted[1]);
+  tets[1] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[1], &elemsInverted[1]);
 
   for (size_t i = 0; i < 2; ++i) {
     qs[i] = a->shape->getQuality(tets[i]);
     if (elemsInverted[i]) qs[i] *= -1;
     if (elemsMade[i]) destroyElement(a, tets[i]);
+    else PCU_ALWAYS_ASSERT((!tets[i]) || m->toModel(tets[i]) != NULL);
   }
 
   bool intersect = ((qs[0] < -qv) && (qs[1] > qv)) || ((qs[0] > qv) && (qs[1] < -qv));
@@ -227,16 +162,17 @@ static bool edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   if (!intersect) return intersect;
 
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[2] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[2], &elemsInverted[2]);
+  tets[2] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[2], &elemsInverted[2]);
   vs[0] = fvi[1]; vs[1] = fvi[2]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[3] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[3], &elemsInverted[3]);
+  tets[3] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[3], &elemsInverted[3]);
   vs[0] = fvi[2]; vs[1] = fvi[0]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[4] = buildOrFind(a, NULL, apf::Mesh::TET, vs, &elemsMade[4], &elemsInverted[4]);
+  tets[4] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[4], &elemsInverted[4]);
 
   for (size_t i = 2; i < 5; ++i) {
     qs[i] = a->shape->getQuality(tets[i]);
     if (elemsInverted[i]) qs[i] *= -1;
     if (elemsMade[i]) destroyElement(a, tets[i]);
+    else PCU_ALWAYS_ASSERT((!tets[i]) || m->toModel(tets[i]) != NULL);
   }
 
   intersect = intersect &&
@@ -332,6 +268,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
         areNewAnglesGood = false;
       }
       if (tryEnt && tryEntMade) destroyElement(adapt, tryEnt);
+      else PCU_ALWAYS_ASSERT((!tryEnt) || m->toModel(tryEnt) != NULL);
     }
   }
 
@@ -444,7 +381,7 @@ Entity* ElemRemCollapse::removeEdge(Entity* e, bool* elemMade)
   Entity* vs[4];
   orientForBuild(m, opVert, face1, tet, dontInvert, vs);
 
-  return buildOrFind(adapt, modelEnt, apf::Mesh::TET, vs, elemMade, NULL);
+  return buildOrFind(adapt, apf::Mesh::TET, vs, elemMade, NULL);
 }
 
 Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
@@ -468,6 +405,7 @@ Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
     double newQual = adapt->shape->getQuality(newTet);
     if (newQual > qualityToBeat){
       if (result && resultMade) destroyElement(adapt, result);
+      else PCU_ALWAYS_ASSERT((!result) || m->toModel(result) != NULL);
       result = newTet;
       resultMade = newTetMade;
       qualityToBeat = newQual;
@@ -475,6 +413,7 @@ Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
     else
       if (newTet && (result != newTet) && newTetMade)
         destroyElement(adapt, newTet);
+      else PCU_ALWAYS_ASSERT((!newTet) || m->toModel(newTet) != NULL);
   }
 
   if (elemMade) *elemMade = resultMade;
@@ -673,6 +612,7 @@ bool ElemRemCollapse::makeNewElements(double qualityToBeat)
       elementRemoved = elementRemoved || removeElement(newTet);
     } else {
       if (newTet && newTetMade) destroyElement(adapt, newTet);
+      else PCU_ALWAYS_ASSERT((!newTet) || adapt->mesh->toModel(newTet) != NULL);
     }
 
     if (!elementRemoved) {
@@ -726,7 +666,6 @@ bool ElemRemCollapse::tryThisDirectionNoCancel(double qualityToBeat)
   //   return false;
   apf::Adjacent oldCav;
   m->getAdjacent(vertToCollapse, m->getDimension(), oldCav);
-  setCavity(oldCav);
   addClassifnGroups(oldCav);
   if (m->getModelType(m->toModel(vertToCollapse)) < m->getDimension()) {
     for (int d = m->getDimension()-1; d > 0; --d) {
@@ -736,6 +675,7 @@ bool ElemRemCollapse::tryThisDirectionNoCancel(double qualityToBeat)
       addClassifnGroups(ups);
     }
   }
+  setCavity(oldCav);
   bool newCavOK = makeNewElements(qualityToBeat);
   if (!newCavOK)
     return false;
@@ -793,6 +733,8 @@ void ElemRemCollapse::unmark(bool cavOnly)
     clearFlag(adapt, *it, CAV_OLD);
     clearFlag(adapt, *it, CAV_NEW);
   }
+
+  classifnGroups.clear();
 }
 
 void ElemRemCollapse::destroyOldElements()
@@ -800,6 +742,7 @@ void ElemRemCollapse::destroyOldElements()
   APF_ITERATE(ma::EntitySet,oldEnts,it)
     if (!getFlag(adapt, *it, CAV_NEW))
       destroyElement(adapt, *it);
+    else PCU_ALWAYS_ASSERT((!*it) || adapt->mesh->toModel(*it) != NULL);
 }
 
 void ElemRemCollapse::destroyNewElements()
@@ -807,6 +750,7 @@ void ElemRemCollapse::destroyNewElements()
   APF_ITERATE(ma::EntitySet,newEnts,it)
     if (!getFlag(adapt, *it, CAV_OLD))
       destroyElement(adapt, *it);
+    else PCU_ALWAYS_ASSERT((!*it) || adapt->mesh->toModel(*it) != NULL);
   newEnts.clear();
 }
 
