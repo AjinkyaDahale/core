@@ -42,7 +42,9 @@ static void orientForBuild(Mesh* m, Entity* opVert, Entity* face, Entity* tet,
   }
 }
 
-// TODO: Might as well use apf::getFaceFaceAngleInTet()
+// Returns the cos of the angle between normals on `face1` and `face2` at the
+// mid-point of `edge`, pointing away from `tet1` and `tet2` respectively.
+// NOTE: Might as well modify apf::getFaceFaceAngleInTet()
 static double getCosDihedral(Adapt* a, Entity* edge,
                              Entity* face1, Entity* tet1,
                              Entity* face2, Entity* tet2)
@@ -147,48 +149,29 @@ bool ElemRemCollapse::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   if (findIn(fvi, 3, evi[0])!=-1 || findIn(fvi, 3, evi[1])!=-1)
     return false;
 
-  double qs[5], qv = a->input->validQuality;
-  Entity* tets[5];
-  bool elemsMade[5], elemsInverted[5];
+  bool tetPositive[5];
   Entity* vs[4];
 
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
-  tets[0] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[0], &elemsInverted[0]);
+  tetPositive[0] = isTetVolPositive(m, vs);
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
-  tets[1] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[1], &elemsInverted[1]);
+  tetPositive[1] = isTetVolPositive(m, vs);
 
-  for (size_t i = 0; i < 2; ++i) {
-    qs[i] = a->shape->getQuality(tets[i]);
-    if (elemsInverted[i]) qs[i] *= -1;
-    if (elemsMade[i]) destroyElement(a, tets[i]);
-    else PCU_ALWAYS_ASSERT((!tets[i]) || m->toModel(tets[i]) != NULL);
-  }
-
-  bool intersect = ((qs[0] < -qv) && (qs[1] > qv)) || ((qs[0] > qv) && (qs[1] < -qv));
-  intersect = intersect || ((qs[0] < qv) && (qs[0] > -qv));
-  intersect = intersect || ((qs[1] < qv) && (qs[1] > -qv));
+  bool intersect = tetPositive[0] != tetPositive[1];
 
   // If both verts of the edge are on the same side of the face,
   // they're not going to intersect.
   if (!intersect) return intersect;
 
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[2] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[2], &elemsInverted[2]);
+  tetPositive[2] = isTetVolPositive(m, vs);
   vs[0] = fvi[1]; vs[1] = fvi[2]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[3] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[3], &elemsInverted[3]);
+  tetPositive[3] = isTetVolPositive(m, vs);
   vs[0] = fvi[2]; vs[1] = fvi[0]; vs[2] = evi[0]; vs[3] = evi[1];
-  tets[4] = buildOrFind(a, apf::Mesh::TET, vs, &elemsMade[4], &elemsInverted[4]);
+  tetPositive[4] = isTetVolPositive(m, vs);
 
-  for (size_t i = 2; i < 5; ++i) {
-    qs[i] = a->shape->getQuality(tets[i]);
-    if (elemsInverted[i]) qs[i] *= -1;
-    if (elemsMade[i]) destroyElement(a, tets[i]);
-    else PCU_ALWAYS_ASSERT((!tets[i]) || m->toModel(tets[i]) != NULL);
-  }
-
-  intersect = intersect &&
-    (((qs[2] > qv) && (qs[3] > qv) && (qs[4] > qv)) ||
-     ((qs[2] < -qv) && (qs[3] < -qv) && (qs[4] < -qv)));
+  intersect = intersect && (tetPositive[2] == tetPositive[3])
+    && (tetPositive[2] == tetPositive[4]);
 
   // TODO: Still leaves out situations where edge and face
   // are on same plane
