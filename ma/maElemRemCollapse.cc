@@ -384,7 +384,7 @@ Entity* ElemRemCollapse::removeFace(Entity* face, bool* elemMade)
 
   bool resultMade = false;
   Entity* result = NULL;
-  double qualityToBeat = adapt->input->validQuality;
+  double qualityToBeat = this->qualToBeat;
 
   for (int i = 0; i < 3; ++i) {
     bool newTetMade;
