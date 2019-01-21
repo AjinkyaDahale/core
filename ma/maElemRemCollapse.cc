@@ -432,12 +432,12 @@ bool ElemRemCollapse::removeElement(Entity* e)
   }
 
   if (canMark) {
-    if (!areNewAnglesGood) {
-      // There are some bad angles introduced, try to undo
-      if (addElement(e))
-        return false;
-      // If failed: what's done is done, go forward
-    }
+    // if (!areNewAnglesGood) {
+    //   // There are some bad angles introduced, try to undo
+    //   if (addElement(e))
+    //     return false;
+    //   // If failed: what's done is done, go forward
+    // }
     // ma_dbg::createCavityMesh(adapt, newEnts, "cavity_now");
     setFlag(adapt, e, CAV_NEW);
     newEntsArray.append(e);
