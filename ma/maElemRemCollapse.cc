@@ -69,18 +69,18 @@ static double getCosDihedral(Adapt* a, Entity* edge,
   return norm1 * norm2;
 }
 
-static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
-{
-  EntityArray faces;
-  faces.setSize(bFaceMap.size());
-  size_t i = 0;
-  for (BFaceMap::const_iterator it = bFaceMap.begin();
-       it != bFaceMap.end(); ++it) {
-    faces[i] = it->first;
-    ++i;
-  }
-  ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
-}
+// static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
+// {
+//   EntityArray faces;
+//   faces.setSize(bFaceMap.size());
+//   size_t i = 0;
+//   for (BFaceMap::const_iterator it = bFaceMap.begin();
+//        it != bFaceMap.end(); ++it) {
+//     faces[i] = it->first;
+//     ++i;
+//   }
+//   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
+// }
 
 static bool isTetVolPositive(Mesh* m, Entity** verts)
 {
@@ -378,13 +378,13 @@ bool ElemRemCollapse::removeElement(Entity* e)
   Mesh* m = adapt->mesh;
   PCU_ALWAYS_ASSERT(m->getType(e) == apf::Mesh::TET);
   if (getFlag(adapt, e, CAV_NEW)) {
-    ma_dbg::createCavityMesh(adapt, newEntsArray, "new_ents_array",
-                             apf::Mesh::TET);
-    showBFaces(adapt, bFaceMap, "bfaces");
-    EntityArray offender;
-    offender.append(e);
-    ma_dbg::createCavityMesh(adapt, offender, "offending_tet", apf::Mesh::TET);
-    apf::fail("Some tet is being removed twice!\n");
+    return false;
+    // ma_dbg::createCavityMesh(adapt, newEntsArray, "new_ents_array", apf::Mesh::TET);
+    // showBFaces(adapt, bFaceMap, "bfaces");
+    // EntityArray offender;
+    // offender.append(e);
+    // ma_dbg::createCavityMesh(adapt, offender, "offending_tet", apf::Mesh::TET);
+    // apf::fail("Some tet is being removed twice!\n");
   }
   // TODO: mark this entity
   Entity* fs[4];
