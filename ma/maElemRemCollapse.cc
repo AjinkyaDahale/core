@@ -82,15 +82,13 @@ static double getCosDihedral(Adapt* a, Entity* edge,
 //   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
 // }
 
-static bool isTetVolPositive(Mesh* m, Entity** verts)
+static double getTetVol(Mesh* m, Entity** verts)
 {
   Vector v[4];
   for (size_t i = 0; i < 4; ++i) {
     m->getPoint(verts[i], 0, v[i]);
   }
-  if ((cross((v[1] - v[0]), (v[2] - v[0])) * (v[3] - v[0])) < 0)
-    return false;
-  return true;
+  return cross((v[1] - v[0]), (v[2] - v[0])) * (v[3] - v[0]);
 }
 
 // static void showNewEnts(Adapt* a, const EntitySet& newEnts, const char* name)
@@ -149,29 +147,41 @@ bool ElemRemCollapse::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   if (findIn(fvi, 3, evi[0])!=-1 || findIn(fvi, 3, evi[1])!=-1)
     return false;
 
-  bool tetPositive[5];
+  double tol = 1e-14;
+
+  double tetVols[5];
   Entity* vs[4];
 
-  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
-  tetPositive[0] = isTetVolPositive(m, vs);
-  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
-  tetPositive[1] = isTetVolPositive(m, vs);
+  double totalVol;
 
-  bool intersect = tetPositive[0] != tetPositive[1];
+  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
+  tetVols[0] = getTetVol(m, vs);
+  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
+  tetVols[1] = getTetVol(m, vs);
+
+  totalVol = std::abs(tetVols[0] - tetVols[1]);
+  double scaledTol = tol * totalVol;
+  
+  bool intersect =
+    ((tetVols[0] < scaledTol) && (tetVols[1] > -scaledTol)) ||
+    ((tetVols[1] < scaledTol) && (tetVols[0] > -scaledTol));
 
   // If both verts of the edge are on the same side of the face,
   // they're not going to intersect.
   if (!intersect) return intersect;
 
   vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetPositive[2] = isTetVolPositive(m, vs);
+  tetVols[2] = getTetVol(m, vs);
   vs[0] = fvi[1]; vs[1] = fvi[2]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetPositive[3] = isTetVolPositive(m, vs);
+  tetVols[3] = getTetVol(m, vs);
   vs[0] = fvi[2]; vs[1] = fvi[0]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetPositive[4] = isTetVolPositive(m, vs);
+  tetVols[4] = getTetVol(m, vs);
 
-  intersect = intersect && (tetPositive[2] == tetPositive[3])
-    && (tetPositive[2] == tetPositive[4]);
+  intersect = intersect &&
+    (((tetVols[2] > -scaledTol) && (tetVols[3] > -scaledTol) &&
+      (tetVols[4] > -scaledTol)) ||
+     ((tetVols[2] < scaledTol) && (tetVols[3] < scaledTol) &&
+      (tetVols[4] < scaledTol)));              
 
   // TODO: Still leaves out situations where edge and face
   // are on same plane
@@ -247,7 +257,7 @@ bool ElemRemCollapse::markEdges(Mesh* m, Entity* face, bool dryRun)
       Entity* vs[4];
       orientForBuild(m, getTriVertOppositeEdge(m, face, edges[k]), face1,
                      bFaceMap[face1].first, bFaceMap[face1].second, vs);
-      if (!isTetVolPositive(m, vs)) {
+      if (!(getTetVol(m, vs) > 0)) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
       } else if (bEdgeMap[edges[k]].cda > 0.9) {
         // TODO: could we use a less arbitrary condition for too acute angles?
