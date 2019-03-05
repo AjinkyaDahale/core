@@ -139,53 +139,75 @@ Entity* ElemRemCollapse::buildOrFind(Adapt* a, int type, Entity** vs,
 bool ElemRemCollapse::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
 {
   Mesh* m = a->mesh;
-  Entity* fvi[3];
-  Entity* evi[2];
-  m->getDownward(edge, 0, evi);
-  m->getDownward(face, 0, fvi);
-
-  if (findIn(fvi, 3, evi[0])!=-1 || findIn(fvi, 3, evi[1])!=-1)
-    return false;
+  Entity* fv[3]; // face vertices
+  Entity* ev[2]; // edge vertices
+  m->getDownward(edge, 0, ev);
+  m->getDownward(face, 0, fv);
 
   double tol = 1e-14;
 
-  double tetVols[5];
-  Entity* vs[4];
+  // If one vertex is common to both edge and face, only non-trivial
+  // intersection is if they are coplanar. We let it be handled somewhere else.
+  if (findIn(fv, 3, ev[0])!=-1 || findIn(fv, 3, ev[1])!=-1)
+    return false;
 
-  double totalVol;
+  Vector fp[3]; // face point coordinates
+  Vector ep[2]; // edge point coordinates
+  for (size_t i = 0; i < 3; ++i) {
+    m->getPoint(fv[i], 0, fp[i]);
+  }
+  for (size_t i = 0; i < 2; ++i) {
+    m->getPoint(ev[i], 0, ep[i]);
+  }
 
-  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[0];
-  tetVols[0] = getTetVol(m, vs);
-  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = fvi[2]; vs[3] = evi[1];
-  tetVols[1] = getTetVol(m, vs);
+  // Following the Moller-Trumbore intersection check algorithm, without
+  // back face culling. We ultimately estimate parametric coordinates of the
+  // intersection point of the line of the edge and the plane of the face w.r.t.
+  // the edge (t) and the face (u, v, 1-u-v). All intermediate entities
+  // computed are for optimization purposes.
+  Vector D = ep[1] - ep[0];
+  Vector E0 = fp[1] - fp[0];
+  Vector E1 = fp[2] - fp[0];
+  Vector A = cross(D, E1);
+  double det = A * E0;
 
-  totalVol = std::abs(tetVols[0] - tetVols[1]);
-  double scaledTol = tol * totalVol;
-  
-  bool intersect =
-    ((tetVols[0] < scaledTol) && (tetVols[1] > -scaledTol)) ||
-    ((tetVols[1] < scaledTol) && (tetVols[0] > -scaledTol));
+  // To make comparison dimensionless, we compare the dot product with the
+  // product of magnitudes.
+  double detTol = std::fabs(tol * A.getLength() * E0.getLength());
 
-  // If both verts of the edge are on the same side of the face,
-  // they're not going to intersect.
-  if (!intersect) return intersect;
+  Vector T, B;
+  if (det > detTol) {
+    T = ep[0] - fp[0];
+  } else if (det < -detTol) {
+    // For further computations, we assume det > 0
+    det = -det;
+    T = fp[0] - ep[0];
+  } else {
+    return false;
+  }
 
-  vs[0] = fvi[0]; vs[1] = fvi[1]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetVols[2] = getTetVol(m, vs);
-  vs[0] = fvi[1]; vs[1] = fvi[2]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetVols[3] = getTetVol(m, vs);
-  vs[0] = fvi[2]; vs[1] = fvi[0]; vs[2] = evi[0]; vs[3] = evi[1];
-  tetVols[4] = getTetVol(m, vs);
+  // The parameters we compute are dimensionless, but we instead choose to
+  // scale the tolerance and avoid some division.
+  double paramTol = tol * det;
 
-  intersect = intersect &&
-    (((tetVols[2] > -scaledTol) && (tetVols[3] > -scaledTol) &&
-      (tetVols[4] > -scaledTol)) ||
-     ((tetVols[2] < scaledTol) && (tetVols[3] < scaledTol) &&
-      (tetVols[4] < scaledTol)));              
+  // Once we have the parametric coordinates, we theoretically want them to be
+  // between 0 and 1 to say intersection happens. However, we choose to err on
+  // side of ensuring there is no intersection and change the limits to
+  // -tol and 1 + tol.
+  double u = A * T;
+  if ((u < -paramTol) || (u - det > paramTol))
+    return false;
 
-  // TODO: Still leaves out situations where edge and face
-  // are on same plane
-  return intersect;
+  B = cross(T, E0);
+  double v = B * D;
+  if ((v < -paramTol) || (v + u - det > paramTol))
+    return false;
+
+  double t = B * E1;
+  if ((t < -paramTol) || (t - det > paramTol))
+    return false;
+
+  return true;
 }
 
 bool ElemRemCollapse::newTetClear(Adapt* a, Entity* tet)
