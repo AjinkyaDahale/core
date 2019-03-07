@@ -19,6 +19,7 @@ set(SOURCES
   maCoarsen.cc
   maSize.cc
   maOperator.cc
+  maElemRemover.cc
   maCollapse.cc
   maRegionCollapse.cc
   maElemRemCollapse.cc
