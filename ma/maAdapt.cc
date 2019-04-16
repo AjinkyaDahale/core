@@ -35,6 +35,8 @@ Adapt::Adapt(Input* in)
   buildCallback = 0;
   sizeField = in->sizeField;
   solutionTransfer = in->solutionTransfer;
+  erfails = 0;
+  printERFails = false;
   refine = new Refine(this);
   if (in->shapeHandler){
     shape = in->shapeHandler(this);

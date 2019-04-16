@@ -82,6 +82,15 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
 }
 
+static double getEstimatedTetQual(Mesh* m, Entity** verts)
+{
+  Vector v[4];
+  for (size_t i = 0; i < 4; ++i) {
+    m->getPoint(verts[i], 0, v[i]);
+  }
+  return measureLinearTetQuality(v);
+}
+
 static double getTetVol(Mesh* m, Entity** verts)
 {
   Vector v[4];
@@ -144,7 +153,7 @@ bool ElemRemover::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   m->getDownward(edge, 0, ev);
   m->getDownward(face, 0, fv);
 
-  double tol = 1e-14;
+  double tol = 1e-10;
 
   // If one vertex is common to both edge and face, only non-trivial
   // intersection is if they are coplanar. We let it be handled somewhere else.
@@ -195,17 +204,40 @@ bool ElemRemover::edgeIntersectsFace(Adapt* a, Entity* face, Entity* edge)
   // side of ensuring there is no intersection and change the limits to
   // -tol and 1 + tol.
   double u = A * T;
-  if ((u < -paramTol) || (u - det > paramTol))
-    return false;
 
   B = cross(T, E0);
   double v = B * D;
-  if ((v < -paramTol) || (v + u - det > paramTol))
-    return false;
 
   double t = B * E1;
   if ((t < -paramTol) || (t - det > paramTol))
     return false;
+
+  if ((u > -0.2*det) && (v > -0.2*det) && (det - u - v > -0.2*det)) {
+    Entity* qcheckvs[4];
+    qcheckvs[2] = ev[0]; qcheckvs[3] = ev[1];
+    if ((u > -0.2*det) && (u < -paramTol)) {
+      qcheckvs[0] = fv[0]; qcheckvs[1] = fv[2];
+      if (getEstimatedTetQual(m, qcheckvs) < qualToBeat)
+	return true;
+    }
+    if ((v > -0.2*det) && (v < -paramTol)) {
+      qcheckvs[0] = fv[0]; qcheckvs[1] = fv[1];
+      if (getEstimatedTetQual(m, qcheckvs) < qualToBeat)
+	return true;
+    }
+    if ((det - u - v > -0.2*det) && (det - u - v < -paramTol)) {
+      qcheckvs[0] = fv[1]; qcheckvs[1] = fv[2];
+      if (getEstimatedTetQual(m, qcheckvs) < qualToBeat)
+	return true;
+    }
+  }
+
+  if ((u < -paramTol) || (u - det > paramTol))
+    return false;
+
+  if ((v < -paramTol) || (v + u - det > paramTol)) {
+    return false;
+  }
 
   return true;
 }
@@ -253,9 +285,13 @@ bool ElemRemover::markEdges(Mesh* m, Entity* face, bool dryRun)
       PCU_ALWAYS_ASSERT(bEdgeMap[edges[k]].face1);
       if (bEdgeMap[edges[k]].face2) {
         if (dryRun) return false;
-        else
+        else {
+          ma_dbg::createCavityMesh(adapt, oldEnts, "crossedge_old_ents");
+          ma_dbg::createCavityMesh(adapt, newEntsArray, "crossedge_new_ents", apf::Mesh::TET);
+          showBFaces(adapt, bFaceMap, "crossedge_bfaces");
           PCU_ALWAYS_ASSERT_VERBOSE(false, "Attempted to mark an edge with more"
                                     " than one faces already defined.\n");
+        }
       }
       if (dryRun) continue;
       Entity* face1 = bEdgeMap[edges[k]].face1;
@@ -276,7 +312,8 @@ bool ElemRemover::markEdges(Mesh* m, Entity* face, bool dryRun)
                      bFaceMap[face1].first, bFaceMap[face1].second, vs);
       if (!(getTetVol(m, vs) > 0)) {
         bEdgeMap[edges[k]].cda = -2 - bEdgeMap[edges[k]].cda;
-      } else if (bEdgeMap[edges[k]].cda > 0.9) {
+      } else if (bEdgeMap[edges[k]].cda > 0 && \
+                 getEstimatedTetQual(m, vs) < this->qualToBeat) {
         // TODO: could we use a less arbitrary condition for too acute angles?
         // Just reply that the angle is too acute for our liking
         if (ignoredFaceClassifn.empty() ||
@@ -331,9 +368,11 @@ bool ElemRemover::setCavity(apf::DynamicArray<Entity*>& elems)
 
   // Expected that anything in these to be destroyed will have
   // been destroyed by the time we're here
-  newEnts.clear();
-  newEntsArray.setSize(0);
-  oldEnts.clear();
+  PCU_DEBUG_ASSERT(oldEnts.empty());
+  PCU_DEBUG_ASSERT(newEnts.empty());
+  PCU_DEBUG_ASSERT(newEntsArray.getSize() == 0);
+  PCU_DEBUG_ASSERT(bFaceMap.empty());
+  PCU_DEBUG_ASSERT(bEdgeMap.empty());
 
   modelEnt = m->toModel(elems[0]);
 
@@ -354,16 +393,28 @@ bool ElemRemover::setCavity(apf::DynamicArray<Entity*>& elems)
     }
   }
 
+  bool canMarkAllBEdges = true;
+
   // Loop through the elems[i]s and then the bs and add bs to boundaryEnts
   for (int i = 0; i < numElems; ++i) {
     int numBs = m->getDownward(elems[i], d-1, bs);
     for (int j = 0; j < numBs; ++j) {
       if (getFlag(adapt, bs[j], MARKED)) {
         // clearFlag(adapt, bs[j], MARKED);
-        PCU_ALWAYS_ASSERT(bFaceMap.count(bs[j]) == 0);
+        if (bFaceMap.count(bs[j]) != 0) {
+          ma_dbg::createCavityMesh(adapt, elems, "badfaces_old_ents");
+          ma_dbg::createCavityMesh(adapt, newEntsArray, "badfaces_new_ents", apf::Mesh::TET);
+          showBFaces(adapt, bFaceMap, "badfaces_bfaces");
+          print("Something bad happening at i = %d, j = %d", i, j);
+          apf::fail("A face is being added twice to bfacemap");
+        }
         bFaceMap[bs[j]] = std::make_pair(elems[i], true);
 
-        markEdges(m, bs[j]);
+        if (markEdges(m, bs[j], true)) {
+          markEdges(m, bs[j]);
+        } else {
+          canMarkAllBEdges = false;
+        }
       }
     }
   }
@@ -371,7 +422,7 @@ bool ElemRemover::setCavity(apf::DynamicArray<Entity*>& elems)
   // ma_dbg::createCavityMesh(adapt, elems, "the_cavity");
   // showBFaces(adapt, bFaceMap, "first_bfaces");
 
-  return true;
+  return canMarkAllBEdges;
 }
 
 Entity* ElemRemover::removeEdge(Entity* e, bool* elemMade)
@@ -464,12 +515,18 @@ bool ElemRemover::removeElement(Entity* e)
   }
 
   if (canMark) {
-    // if (!areNewAnglesGood) {
-    //   // There are some bad angles introduced, try to undo
-    //   if (addElement(e))
-    //     return false;
-    //   // If failed: what's done is done, go forward
-    // }
+    if (!areNewAnglesGood) {
+      // There are some bad angles introduced, try to undo
+      if (addElement(e)) {
+        return false;
+      } else {
+        ma_dbg::createCavityMesh(adapt, oldEnts, "oldEnts_cantadd", Mesh::TET);
+        ma_dbg::createCavityMesh(adapt, newEnts, "newEnts_cantadd", Mesh::TET);
+        ma_dbg::createCavityMesh(adapt, newEntsArray, "newEntsArray_cantadd", Mesh::TET);
+        apf::fail("cannot add back!");
+      }
+      // If failed: what's done is done, go forward
+    }
     // ma_dbg::createCavityMesh(adapt, newEnts, "cavity_now");
     setFlag(adapt, e, CAV_NEW);
     newEntsArray.append(e);
@@ -592,9 +649,11 @@ bool ElemRemover::makeNewElements(double qualityToBeat)
     bool newTetMade;
     Entity* newTet = removeEdge(edge, &newTetMade);
 
-    if (newTet &&
-        (adapt->shape->getQuality(newTet) >
-         qualityToBeat)) {
+    if (newTet && (adapt->shape->getQuality(newTet) > qualityToBeat)) {
+    // if (newTet &&
+    //     (adapt->shape->getQuality(newTet) > qualityToBeat) &&
+    //     (adapt->sizeField->measure(
+    //       getTetEdgeOppositeEdge(adapt->mesh, newTet, edge)) < 1.5)) {
       elementRemoved = elementRemoved || removeElement(newTet);
     } else {
       if (newTet && newTetMade) destroyElement(adapt, newTet);
@@ -619,23 +678,36 @@ bool ElemRemover::makeNewElements(double qualityToBeat)
   // showNewEnts(adapt, newEnts, "the_new_cavity");
   // showBFaces(adapt, bFaceMap, "final_bfaces");
 
+  bool retVal = false;
   if (!ignoredFaceClassifn.empty()) {
     bool ignoreRest = true;
     APF_ITERATE(BFaceMap,bFaceMap,it) {
       ignoreRest = ignoreRest &&
         (ignoredFaceClassifn.count(adapt->mesh->toModel(it->first)));
     }
-    return ignoreRest;
+    retVal = ignoreRest;
+  } else {
+    retVal = (bEdgeMap.size() == 0);
   }
 
-  return (bEdgeMap.size() == 0);
+  if (adapt->printERFails && !retVal && (adapt->erfails++ % 20 == 0)) {
+    reportState(adapt->erfails);
+  }
+
+  return retVal;
 }
 
-void ElemRemover::reportState()
+void ElemRemover::reportState(int count)
 {
-  ma_dbg::createCavityMesh(adapt, oldEnts, "cavity_old");
-  ma_dbg::createCavityMesh(adapt, newEntsArray, "new_ents_array", apf::Mesh::TET);
-  showBFaces(adapt, bFaceMap, "final_bfaces");
+  std::stringstream ss;
+  ss << "cavity_old_" << count;
+  ma_dbg::createCavityMesh(adapt, oldEnts, ss.str().c_str());
+  ss.str(std::string());
+  ss << "new_ents_array_" << count;
+  ma_dbg::createCavityMesh(adapt, newEntsArray, ss.str().c_str(), apf::Mesh::TET);
+  ss.str(std::string());
+  ss << "final_bfaces_" << count;
+  showBFaces(adapt, bFaceMap, ss.str().c_str());
 }
 
 void ElemRemover::cancel()
@@ -646,6 +718,7 @@ void ElemRemover::cancel()
   bFaceMap.clear();
   oldEnts.clear();
   newEnts.clear();
+  newEntsArray.setSize(0);
   edgesInQueue.clear();
 }
 
@@ -670,11 +743,14 @@ void ElemRemover::unmark()
     clearFlag(adapt, *it, CAV_OLD);
     clearFlag(adapt, *it, CAV_NEW);
   }
+  oldEnts.clear();
 
   APF_ITERATE(EntitySet,newEnts,it) {
     clearFlag(adapt, *it, CAV_OLD);
     clearFlag(adapt, *it, CAV_NEW);
   }
+  newEnts.clear();
+  newEntsArray.setSize(0);
 
   classifnGroups.clear();
 }
@@ -685,6 +761,7 @@ void ElemRemover::destroyOldElements()
     if (!getFlag(adapt, *it, CAV_NEW))
       destroyElement(adapt, *it);
     else PCU_ALWAYS_ASSERT((!*it) || adapt->mesh->toModel(*it) != NULL);
+  oldEnts.clear();
 }
 
 void ElemRemover::destroyNewElements()
@@ -694,6 +771,7 @@ void ElemRemover::destroyNewElements()
       destroyElement(adapt, *it);
     else PCU_ALWAYS_ASSERT((!*it) || adapt->mesh->toModel(*it) != NULL);
   newEnts.clear();
+  newEntsArray.setSize(0);
 }
 
 }

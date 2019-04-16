@@ -169,6 +169,16 @@ Entity* getTriVertOppositeEdge(Mesh* m, Entity* tri, Entity* e)
   return tv[table[n]];
 }
 
+Entity* getTetEdgeOppositeEdge(Mesh* m, Entity* tet, Entity* edge)
+{
+  static int const table[6] = {5, 3, 4, 1, 2, 0};
+  Entity* tete[6];
+  m->getDownward(tet,1,tete);
+  int n = findIn(tete,6,edge);
+  PCU_ALWAYS_ASSERT(n >= 0);
+  return tete[table[n]];
+}
+
 Entity* getTetVertOppositeTri(Mesh* m, Entity* tet, Entity* tri)
 {
   Entity* tetv[4];
