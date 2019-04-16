@@ -38,6 +38,7 @@ set(SOURCES
   maSingleSplitCollapse.cc
   maFaceSplitCollapse.cc
   maShortEdgeRemover.cc
+  maERShortEdgeRemover.cc
   maVertRemover.cc
   maSnapper.cc
   maMatchedSnapper.cc

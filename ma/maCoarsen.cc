@@ -196,8 +196,10 @@ class ElemRemEdgeCollapser : public Operator
     {
       if ( ! collapse.checkTopo())
         return;
-      if ( ! erc.checkTopo())
+      if ( ! erc.checkTopo()) {
+	erc.cancel();
         return;
+      }
       if (collapse.tryBothDirections(qualityToBeat)) {
         collapse.destroyOldElements();
         ++successCount;

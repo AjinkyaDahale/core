@@ -15,10 +15,11 @@
 #include "maSnap.h"
 #include "maOperator.h"
 #include "maEdgeSwap.h"
+#include "maElemRemCollapse.h"
 #include "maDoubleSplitCollapse.h"
 #include "maSingleSplitCollapse.h"
 #include "maFaceSplitCollapse.h"
-#include "maShortEdgeRemover.h"
+#include "maERShortEdgeRemover.h"
 #include "maShapeHandler.h"
 #include "maBalance.h"
 #include "maDBG.h"
@@ -239,7 +240,7 @@ class ShortEdgeFixer : public Operator
     Mesh* mesh;
     Entity* element;
     SizeField* sizeField;
-    ShortEdgeRemover remover;
+    ERShortEdgeRemover remover;
     double shortEdgeRatio;
   public:
     int nr;
@@ -743,7 +744,10 @@ static double fixShortEdgeElements(Adapt* a)
 {
   double t0 = PCU_Time();
   ShortEdgeFixer fixer(a);
+  a->printERFails = true;
   applyOperator(a,&fixer);
+  a->printERFails = false;
+  print("short-edge-fixer success/fail: %d/%d", fixer.nr, fixer.nf);
   double t1 = PCU_Time();
   return t1 - t0;
 }

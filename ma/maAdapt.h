@@ -62,6 +62,8 @@ class Adapt
     int coarsensLeft;
     int refinesLeft;
     bool hasLayer;
+    int erfails;
+    bool printERFails;
 };
 
 void setTolerance(Adapt* a, double t);

@@ -49,7 +49,7 @@ public:
   /** Remove the highest dimension entity */
   bool removeElement(Entity* e);
 
-  void reportState();
+  void reportState(int count);
 
   bool makeNewElements(double qualityToBeat);
   void cancel();
