@@ -82,6 +82,17 @@ static void showBFaces(Adapt* a, const BFaceMap& bFaceMap, const char* name)
   ma_dbg::createCavityMesh(a, faces, name, apf::Mesh::TRIANGLE);
 }
 
+static void showOldEnts(Adapt* a, const EntitySet& oldEnts, const char* name)
+{
+  EntityArray ents;
+  APF_ITERATE(EntitySet,oldEnts,it) {
+    if (getFlag(a, *it, CAV_OLD)) {
+      ents.append(*it);
+    }
+  }
+  ma_dbg::createCavityMesh(a, ents, name);
+}
+
 static double getEstimatedTetQual(Mesh* m, Entity** verts)
 {
   Vector v[4];
@@ -701,7 +712,7 @@ void ElemRemover::reportState(int count)
 {
   std::stringstream ss;
   ss << "cavity_old_" << count;
-  ma_dbg::createCavityMesh(adapt, oldEnts, ss.str().c_str());
+  showOldEnts(adapt, oldEnts, ss.str().c_str());
   ss.str(std::string());
   ss << "new_ents_array_" << count;
   ma_dbg::createCavityMesh(adapt, newEntsArray, ss.str().c_str(), apf::Mesh::TET);
@@ -724,7 +735,7 @@ void ElemRemover::cancel()
 
 void ElemRemover::transfer()
 {
-  // keeping as placeholder for whenever element insertion is used
+  // keeping as placeholder for whenever point insertion is used
 }
 
 void ElemRemover::unmark()
@@ -775,3 +786,4 @@ void ElemRemover::destroyNewElements()
 }
 
 }
+
