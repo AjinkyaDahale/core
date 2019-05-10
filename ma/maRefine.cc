@@ -408,10 +408,14 @@ void cleanupAfter(Refine* r)
 
 bool refine(Adapt* a)
 {
-  double t0 = PCU_Time();
+  double t0, t1;
+  t0 = PCU_Time();
   --(a->refinesLeft);
   setupLayerForSplit(a);
   long count = markEdgesToSplit(a);
+  t1 = PCU_Time();
+  print("%ld edges marked for split in %f seconds.",count,t1-t0);
+  t0 = PCU_Time();
   if ( ! count) {
     freezeLayer(a);
     return false;
@@ -427,7 +431,7 @@ bool refine(Adapt* a)
   processNewElements(r);
   destroySplitElements(r);
   forgetNewEntities(r);
-  double t1 = PCU_Time();
+  t1 = PCU_Time();
   print("refined %li edges in %f seconds",count,t1-t0);
   resetLayer(a);
   if (a->hasLayer)

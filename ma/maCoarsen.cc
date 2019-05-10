@@ -112,6 +112,7 @@ class AllEdgeCollapser : public Operator
     {
       collapse.Init(a);
       successCount = 0;
+      failureCount = 0;
       if(a->input->shouldForceAdaptation)
         qualityToBeat = getAdapt()->input->validQuality;
       else
@@ -137,15 +138,20 @@ class AllEdgeCollapser : public Operator
     }
     virtual void apply()
     {
-      if ( ! collapse.checkTopo())
+      if ( ! collapse.checkTopo()) {
+        ++failureCount;
         return;
-      if ( ! collapse.tryBothDirections(qualityToBeat))
+      }
+      if ( ! collapse.tryBothDirections(qualityToBeat)) {
+        ++failureCount;
         return;
+      }
       collapse.destroyOldElements();
       ++successCount;
     }
     Adapt* getAdapt() {return collapse.adapt;}
     int successCount;
+    int failureCount;
   private:
     Collapse collapse;
     int modelDimension;
@@ -156,6 +162,8 @@ int collapseAllEdges(Adapt* a, int modelDimension)
 {
   AllEdgeCollapser collapser(a,modelDimension);
   applyOperator(a,&collapser);
+  print("collapseEdgesByElemRem success reg/fail: %d/%d",
+        collapser.successCount, collapser.failureCount);
   return collapser.successCount;
 }
 
@@ -168,6 +176,9 @@ class ElemRemEdgeCollapser : public Operator
       collapse.Init(a);
       erc.Init(a);
       successCount = 0;
+      success1Count = 0;
+      success2Count = 0;
+      failureCount = 0;
       if(a->input->shouldForceAdaptation)
         qualityToBeat = getAdapt()->input->validQuality;
       else
@@ -194,25 +205,34 @@ class ElemRemEdgeCollapser : public Operator
     }
     virtual void apply()
     {
-      if ( ! collapse.checkTopo())
+      if ( ! collapse.checkTopo()) {
+        ++failureCount;
         return;
+      }
       if ( ! erc.checkTopo()) {
-	erc.cancel();
+        erc.cancel();
+        ++failureCount;
         return;
       }
       if (collapse.tryBothDirections(qualityToBeat)) {
         collapse.destroyOldElements();
+        ++success1Count;
         ++successCount;
       } else if (erc.tryBothDirections(qualityToBeat)) {
         erc.destroyOldElements();
         erc.unmark(true);
+        ++success2Count;
         ++successCount;
       } else {
+        ++failureCount;
         return;
       }
     }
     Adapt* getAdapt() {return erc.adapt;}
     int successCount;
+    int success1Count;
+    int success2Count;
+    int failureCount;
   private:
     Collapse collapse;
     ElemRemCollapse erc;
@@ -224,6 +244,8 @@ int collapseEdgesByElemRem(Adapt* a, int modelDimension)
 {
   ElemRemEdgeCollapser collapser(a,modelDimension);
   applyOperator(a,&collapser);
+  print("collapseEdgesByElemRem success reg/success erc/fail: %d/%d/%d",
+        collapser.success1Count, collapser.success2Count, collapser.failureCount);
   return collapser.successCount;
 }
 
@@ -327,8 +349,12 @@ bool coarsenByElemRem(Adapt* a)
 {
   if (!a->input->shouldCoarsen)
     return false;
-  double t0 = PCU_Time();
+  double t0, t1;
+  t0 = PCU_Time();
   long count = markEdgesToCollapse(a);
+  t1 = PCU_Time();
+  print("%ld edges marked for collapse in %f seconds.",count,t1-t0);
+  t0 = PCU_Time();
   if ( ! count)
     return false;
   Mesh* m = a->mesh;
@@ -345,7 +371,7 @@ bool coarsenByElemRem(Adapt* a)
       successCount += collapseEdgesByElemRem(a, modelDimension);
   }
   successCount = PCU_Add_Long(successCount);
-  double t1 = PCU_Time();
+  t1 = PCU_Time();
   print("coarsened %li edges by element removal in %f seconds",successCount,t1-t0);
   return true;
 }

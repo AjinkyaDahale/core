@@ -744,9 +744,9 @@ static double fixShortEdgeElements(Adapt* a)
 {
   double t0 = PCU_Time();
   ShortEdgeFixer fixer(a);
-  a->printERFails = true;
+  // a->printERFails = true;
   applyOperator(a,&fixer);
-  a->printERFails = false;
+  // a->printERFails = false;
   print("short-edge-fixer success/fail: %d/%d", fixer.nr, fixer.nf);
   double t1 = PCU_Time();
   return t1 - t0;
@@ -756,6 +756,9 @@ static void fixLargeAngleTets(Adapt* a)
 {
   LargeAngleTetFixer fixer(a);
   applyOperator(a,&fixer);
+  print("Number of edge-edge swaps/DSCs/fails: %d/%d/%d", fixer.edgeEdgeFixer.nes, fixer.edgeEdgeFixer.ndsc, fixer.edgeEdgeFixer.nf);
+  print("Number of edge-vert swaps/SSCs/fails: %d/%d/%d", fixer.edgeVertFixer.nes, fixer.edgeVertFixer.nssc, fixer.edgeVertFixer.nf);
+  print("Number of face-vert edge-swaps/FSCs/fails: %d/%d/%d", fixer.faceVertFixer.nes, fixer.faceVertFixer.nfsc, fixer.faceVertFixer.nf);
 }
 
 static void fixLargeAngleTris(Adapt* a)
@@ -816,8 +819,12 @@ void fixElementShapes(Adapt* a)
 {
   if ( ! a->input->shouldFixShape)
     return;
-  double t0 = PCU_Time();
+  double t0, t1;
+  t0 = PCU_Time();
   int count = markBadQuality(a);
+  t1 = PCU_Time();
+  print("%d elements marked as bad quality in %f seconds.", count, t1-t0);
+  t0 = PCU_Time();
   int originalCount = count;
   int prev_count;
   double time;
@@ -848,9 +855,9 @@ void fixElementShapes(Adapt* a)
 	((double) prev_count - (double) count) / (double) prev_count);
     iter++;
   } while(count < prev_count);
-  double t1 = PCU_Time();
+  t1 = PCU_Time();
   print("bad shapes down from %d to %d in %f seconds",
-        originalCount,count,t1-t0);
+        originalCount, count, t1-t0);
 }
 
 void alignElements(Adapt* a)
